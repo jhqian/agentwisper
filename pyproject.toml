@@ -10,6 +10,9 @@ dependencies = [
     "click",
 ]
 
+[project.scripts]
+vibe-broker = "cli.main:main"
+
 [dependency-groups]
 dev = [
     "pytest",
