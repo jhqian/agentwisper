@@ -1,0 +1,112 @@
+# Copyright 2026 vibe-agentsquad contributors
+# Licensed under the Apache License, Version 2.0
+
+"""Agent store providing CRUD and lifecycle operations for agents."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import Any
+
+from common.types import AgentStatus
+from persistence.database import AsyncDatabase
+
+
+def _generate_agent_id() -> str:
+    return f"agent_{uuid.uuid4().hex[:20]}"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class AgentStore:
+    """Wraps AsyncDatabase to provide agent persistence operations."""
+
+    def __init__(self, db: AsyncDatabase) -> None:
+        self._db = db
+
+    async def create(
+        self,
+        name: str,
+        capabilities: list[str],
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Create a new agent record. Returns the generated agent_id."""
+        agent_id = _generate_agent_id()
+        now = _now_iso()
+        await self._db.execute(
+            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, metadata) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                agent_id,
+                name,
+                AgentStatus.ACTIVE,
+                json.dumps(capabilities),
+                now,
+                now,
+                json.dumps(metadata or {}),
+            ),
+        )
+        return agent_id
+
+    async def get(self, agent_id: str) -> dict[str, Any] | None:
+        """Retrieve an agent by ID. Returns None if not found."""
+        return await self._db.execute_fetchone(
+            "SELECT * FROM agents WHERE agent_id = ?", (agent_id,)
+        )
+
+    async def get_by_name(self, name: str) -> dict[str, Any] | None:
+        """Retrieve an agent by name. Returns None if not found."""
+        return await self._db.execute_fetchone(
+            "SELECT * FROM agents WHERE name = ? LIMIT 1", (name,)
+        )
+
+    async def update_status(self, agent_id: str, status: AgentStatus) -> None:
+        """Update agent status."""
+        await self._db.execute(
+            "UPDATE agents SET status = ? WHERE agent_id = ?",
+            (status, agent_id),
+        )
+
+    async def update_heartbeat(self, agent_id: str, timestamp: str) -> None:
+        """Update agent last heartbeat timestamp."""
+        await self._db.execute(
+            "UPDATE agents SET last_heartbeat = ? WHERE agent_id = ?",
+            (timestamp, agent_id),
+        )
+
+    async def set_squad(self, agent_id: str, squad_id: str | None) -> None:
+        """Assign or clear agent squad membership."""
+        await self._db.execute(
+            "UPDATE agents SET squad_id = ? WHERE agent_id = ?",
+            (squad_id, agent_id),
+        )
+
+    async def set_team(self, agent_id: str, team_id: str | None) -> None:
+        """Assign or clear agent team membership."""
+        await self._db.execute(
+            "UPDATE agents SET current_team_id = ? WHERE agent_id = ?",
+            (team_id, agent_id),
+        )
+
+    async def delete(self, agent_id: str) -> None:
+        """Delete an agent record."""
+        await self._db.execute(
+            "DELETE FROM agents WHERE agent_id = ?", (agent_id,)
+        )
+
+    async def list_all(self) -> list[dict[str, Any]]:
+        """List all agents ordered by creation time."""
+        return await self._db.execute_fetchall(
+            "SELECT * FROM agents ORDER BY created_at"
+        )
+
+    async def list_by_squad(self, squad_id: str) -> list[dict[str, Any]]:
+        """List all agents in a given squad ordered by creation time."""
+        return await self._db.execute_fetchall(
+            "SELECT * FROM agents WHERE squad_id = ? ORDER BY created_at",
+            (squad_id,),
+        )
