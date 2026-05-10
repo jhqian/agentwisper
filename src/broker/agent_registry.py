@@ -91,7 +91,14 @@ class AgentRegistry:
         await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
 
     async def heartbeat(self, agent_id: str) -> None:
-        """Update agent heartbeat timestamp to current UTC time."""
+        """Update agent heartbeat timestamp and restore disconnected agents.
+
+        A heartbeat proves the agent is alive, so disconnected agents are
+        automatically restored to active status.
+        """
+        agent = await self._agent_store.get(agent_id)
+        if agent is not None and agent["status"] == AgentStatus.DISCONNECTED:
+            await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
         now = datetime.now(timezone.utc).isoformat()
         await self._agent_store.update_heartbeat(agent_id, now)
 
