@@ -355,6 +355,8 @@ def create_server() -> FastMCP:
     return mcp
 
 
-def run_server(transport: str = "stdio") -> None:
+def run_server(transport: str = "stdio", port: int | None = None) -> None:
     """Run the MCP server."""
+    if port is not None:
+        mcp.settings.port = port
     mcp.run(transport=transport)

@@ -37,7 +37,7 @@ def start(transport: str, port: int) -> None:
         os.environ["AGENTSQUAD_TRANSPORT"] = transport
         os.environ.setdefault("AGENTSQUAD_HTTP_PORT", str(port))
 
-    run_server(transport=transport)
+    run_server(transport=transport, port=port if transport != "stdio" else None)
 
 
 @cli.command()

@@ -42,6 +42,11 @@ class AgentRegistry:
         agent = await self._agent_store.get(agent_id)
         if agent is None:
             raise ValueError(f"Agent {agent_id} not found")
+        await self._db.execute("DELETE FROM squad_memberships WHERE agent_id = ?", (agent_id,))
+        await self._db.execute("DELETE FROM team_memberships WHERE agent_id = ?", (agent_id,))
+        await self._db.execute("DELETE FROM subscriptions WHERE agent_id = ?", (agent_id,))
+        await self._db.execute("UPDATE agents SET squad_id = NULL WHERE agent_id = ?", (agent_id,))
+        await self._db.execute("UPDATE agents SET current_team_id = NULL WHERE agent_id = ?", (agent_id,))
         await self._agent_store.delete(agent_id)
 
     async def get_info(self, agent_id: str) -> dict[str, Any] | None:
