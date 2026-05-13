@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for the Broker core orchestrator."""
@@ -76,12 +76,8 @@ async def test_broker_status(broker):
     status = await broker.broker_status()
     assert status["status"] == "healthy"
     assert "active_agents" in status
-
-
-async def test_broker_heartbeat(broker):
-    r = await broker.register_agent("test", [])
-    result = await broker.agent_heartbeat(r["agent_id"])
-    assert "last_heartbeat" in result
+    assert "pending_messages" in status
+    assert "waiting_agents" in status
 
 
 async def test_broker_pause_resume(broker):
@@ -97,4 +93,98 @@ async def test_broker_deregister(broker):
     r = await broker.register_agent("test", [])
     await broker.deregister_agent(r["agent_id"])
     info = await broker.get_agent_info(r["agent_id"])
-    assert info is None
+    assert info is not None
+    assert info["status"] == "disconnected"
+
+
+async def test_broker_send_notifies_wait_event(broker):
+    r = await broker.register_agent("receiver", [])
+    event = broker.register_wait(r["agent_id"])
+    assert not event.is_set()
+    # send_message triggers _notify_recipients which sets the event
+    r1 = await broker.register_agent("sender", [])
+    await broker.send_message(r1["agent_id"], r["agent_id"], "hello", "p2p")
+    assert event.is_set()
+    broker.unregister_wait(r["agent_id"])
+
+
+async def test_broker_register_wait_and_notify(broker):
+    import anyio
+    r = await broker.register_agent("test", [])
+    event = broker.register_wait(r["agent_id"])
+    assert not event.is_set()
+    assert r["agent_id"] in broker._wait_events
+    event.set()
+    assert event.is_set()
+    broker.unregister_wait(r["agent_id"])
+    assert r["agent_id"] not in broker._wait_events
+
+
+async def test_broker_wake_agent(broker):
+    r = await broker.register_agent("sleepy", [])
+    await broker.pause_agent(r["agent_id"])
+    info = await broker.get_agent_info(r["agent_id"])
+    assert info["status"] == "paused"
+    result = await broker.wake_agent(r["agent_id"], message="Wake up!")
+    assert result["status"] == "active"
+    assert result["message_queued"] is True
+    info = await broker.get_agent_info(r["agent_id"])
+    assert info["status"] == "active"
+
+
+async def test_broker_wake_already_active_agent(broker):
+    r = await broker.register_agent("active-agent", [])
+    result = await broker.wake_agent(r["agent_id"], message="Hello")
+    assert result["status"] == "active"
+    assert result["message_queued"] is True
+
+
+async def test_broker_register_duplicate_name_gets_suffix(broker):
+    r1 = await broker.register_agent("dev", ["code"])
+    r2 = await broker.register_agent("dev", ["test"])
+    assert r1["assigned_name"] == "dev"
+    assert r2["assigned_name"] == "dev-1"
+    assert r1["agent_id"] != r2["agent_id"]
+
+
+async def test_broker_message_wait_unblocks_on_send(broker):
+    """message_wait should return immediately when message arrives."""
+    r = await broker.register_agent("receiver", [])
+    event = broker.register_wait(r["agent_id"])
+    assert not event.is_set()
+    r1 = await broker.register_agent("sender", [])
+    await broker.send_message(r1["agent_id"], r["agent_id"], "hello", "p2p")
+    assert event.is_set()
+    broker.unregister_wait(r["agent_id"])
+
+
+async def test_broker_register_with_session_name(broker):
+    result = await broker.register_agent("test", ["code"], session_name="sess_123")
+    assert result["agent_id"].startswith("agent_")
+    info = await broker.get_agent_info(result["agent_id"])
+    assert info["session_name"] == "sess_123"
+
+
+async def test_broker_deregister_soft_delete(broker):
+    r = await broker.register_agent("test", [])
+    await broker.deregister_agent(r["agent_id"])
+    info = await broker.get_agent_info(r["agent_id"])
+    assert info is not None
+    assert info["status"] == "disconnected"
+
+
+async def test_broker_reconnect(broker):
+    r = await broker.register_agent("dev", ["code"], session_name="sess_old")
+    agent_id = r["agent_id"]
+    await broker.deregister_agent(agent_id)
+    result = await broker.reconnect_agent("dev", session_name="sess_new")
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "active"
+    info = await broker.get_agent_info(agent_id)
+    assert info["status"] == "active"
+    assert info["session_name"] == "sess_new"
+
+
+async def test_broker_reconnect_not_found(broker):
+    with pytest.raises(ValueError, match="No disconnected agent"):
+        await broker.reconnect_agent("nonexistent", session_name="sess_1")

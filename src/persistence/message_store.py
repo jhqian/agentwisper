@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Message store providing CRUD, delivery log fan-out, and query operations."""
@@ -90,6 +90,14 @@ class MessageStore:
             "UPDATE messages SET status = ? WHERE msg_id = ?",
             (MessageStatus.FAILED, msg_id),
         )
+
+    async def count_pending(self) -> int:
+        """Count all pending messages."""
+        row = await self._db.execute_fetchone(
+            "SELECT COUNT(*) as cnt FROM messages WHERE status = ?",
+            (MessageStatus.PENDING,),
+        )
+        return row["cnt"] if row else 0
 
     async def create_delivery_logs(
         self, msg_id: str, recipient_ids: list[str]

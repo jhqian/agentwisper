@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for CLI entry point."""
@@ -19,7 +19,6 @@ def test_start_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["start", "--help"])
     assert result.exit_code == 0
-    assert "--transport" in result.output
     assert "--port" in result.output
 
 

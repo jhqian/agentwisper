@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS agents (
     current_team_id TEXT,
     created_at TEXT NOT NULL,
     last_heartbeat TEXT NOT NULL,
+    session_name TEXT,
     metadata TEXT NOT NULL DEFAULT '{}'
 );
 
@@ -96,7 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_delivery_msg ON delivery_logs(msg_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_recipient ON delivery_logs(recipient_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_status ON delivery_logs(status);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
-CREATE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name) WHERE status != 'disconnected';
 CREATE INDEX IF NOT EXISTS idx_agents_squad ON agents(squad_id);
 CREATE INDEX IF NOT EXISTS idx_agents_team ON agents(current_team_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_agent ON subscriptions(agent_id);
@@ -104,6 +105,15 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_topic ON subscriptions(topic);
 CREATE INDEX IF NOT EXISTS idx_squad_memberships_agent ON squad_memberships(agent_id);
 CREATE INDEX IF NOT EXISTS idx_team_memberships_agent ON team_memberships(agent_id);
 """
+
+MIGRATIONS = [
+    # Migration 1: add session_name column and UNIQUE constraint on name
+    """
+    ALTER TABLE agents ADD COLUMN session_name TEXT;
+    DROP INDEX IF EXISTS idx_agents_name;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name) WHERE status != 'disconnected';
+    """,
+]
 
 
 class AsyncDatabase:
@@ -121,6 +131,16 @@ class AsyncDatabase:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.executescript(SCHEMA_SQL)
+        # Fresh databases get the full schema above; set version so
+        # migrations targeting older schemas are skipped.
+        current_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if current_version == 0 and len(MIGRATIONS) > 0:
+            conn.execute(f"PRAGMA user_version = {len(MIGRATIONS)}")
+        else:
+            for i in range(current_version, len(MIGRATIONS)):
+                conn.executescript(MIGRATIONS[i])
+                conn.execute(f"PRAGMA user_version = {i + 1}")
+        conn.commit()
         conn.close()
 
     async def close(self) -> None:

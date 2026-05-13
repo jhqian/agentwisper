@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """End-to-end integration tests for P2P message flow."""
@@ -38,7 +38,9 @@ async def test_p2p_full_flow(broker):
         == '{"question": "What is the DB schema?"}'
     )
 
-    await broker.acknowledge_message(msg["msg_id"])
+    # Poll auto-acknowledges, second poll returns empty
+    repolled = await broker.poll_messages(receiver["agent_id"])
+    assert len(repolled["messages"]) == 0
 
 
 async def test_p2p_send_by_name(broker):

@@ -1,5 +1,5 @@
 import pytest
-from persistence.database import AsyncDatabase
+from persistence.database import AsyncDatabase, MIGRATIONS
 
 
 @pytest.fixture
@@ -39,3 +39,32 @@ async def test_database_execute(db):
     rows = await db.execute_fetchall("SELECT * FROM agents WHERE agent_id = ?", ("agent_test",))
     assert len(rows) == 1
     assert rows[0]["name"] == "test"
+
+
+async def test_session_name_column_exists(db):
+    await db.execute(
+        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, session_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("agent_sn", "sn-test", "active", "[]", "2026-01-01", "2026-01-01", "session_123"),
+    )
+    row = await db.execute_fetchone("SELECT session_name FROM agents WHERE agent_id = ?", ("agent_sn",))
+    assert row["session_name"] == "session_123"
+
+
+async def test_unique_name_constraint(db):
+    await db.execute(
+        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("agent_1", "dev", "active", "[]", "2026-01-01", "2026-01-01"),
+    )
+    with pytest.raises(Exception):
+        await db.execute(
+            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("agent_2", "dev", "active", "[]", "2026-01-01", "2026-01-01"),
+        )
+
+
+async def test_migration_version(db):
+    version = await db.execute_fetchone("PRAGMA user_version")
+    assert version["user_version"] == len(MIGRATIONS)

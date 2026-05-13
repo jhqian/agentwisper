@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Smoke test: start a real broker subprocess and validate MCP tools.
@@ -87,9 +87,13 @@ async def check_p2p(session: ClientSession, a: str, b: str) -> None:
     msgs = polled.get("messages", [])
     report("p2p poll", len(msgs) >= 1, f"got {len(msgs)} messages")
 
-    msg_id = msgs[0]["msg_id"]
-    ack = await call_tool(session, "message_ack", {"msg_id": msg_id})
-    report("p2p ack", ack.get("status") in ("acknowledged", "ok"), str(ack))
+    # Verify poll auto-acknowledges (second poll returns empty)
+    repolled = await call_tool(
+        session,
+        "message_poll",
+        {"agent_id": b, "unread_only": True},
+    )
+    report("p2p auto-ack", len(repolled.get("messages", [])) == 0, "messages auto-acknowledged")
 
 
 async def check_rpc(session: ClientSession, a: str, b: str) -> None:
@@ -115,28 +119,23 @@ async def check_rpc(session: ClientSession, a: str, b: str) -> None:
     ]
     report("rpc poll", len(rpc_msgs) >= 1, f"got {len(rpc_msgs)} rpc messages")
 
-    parent_id = rpc_msgs[0]["msg_id"]
+    # Worker sends response back via send
     reply = await call_tool(
         session,
-        "message_reply",
-        {"parent_msg_id": parent_id, "sender_id": b, "payload": "rpc-response"},
+        "message_send",
+        {"sender_id": b, "recipient": a, "payload": "rpc-response", "msg_type": "p2p"},
     )
-    report("rpc reply", "msg_id" in reply, str(reply))
+    report("rpc response send", "msg_id" in reply, str(reply))
 
     resp_polled = await call_tool(
         session,
         "message_poll",
         {"agent_id": a, "unread_only": True},
     )
-    rpc_resps = [
-        m
-        for m in resp_polled.get("messages", [])
-        if m.get("msg_type") == "rpc_response"
-    ]
     report(
         "rpc response poll",
-        len(rpc_resps) >= 1,
-        f"got {len(rpc_resps)} rpc responses",
+        len(resp_polled.get("messages", [])) >= 1,
+        f"got {len(resp_polled.get('messages', []))} responses",
     )
 
 
@@ -201,11 +200,6 @@ async def check_pubsub(session: ClientSession, a: str, b: str) -> None:
     report("pubsub poll", len(pubsub_msgs) >= 1, f"got {len(pubsub_msgs)} pubsub messages")
 
 
-async def check_heartbeat(session: ClientSession, a: str) -> None:
-    hb = await call_tool(session, "heartbeat", {"agent_id": a})
-    report("heartbeat", hb.get("status") == "ok" or "last_seen" in hb, str(hb))
-
-
 async def check_status(session: ClientSession) -> None:
     st = await call_tool(session, "broker_status", {})
     report("broker status", st.get("status") == "healthy", str(st))
@@ -225,6 +219,27 @@ async def check_cleanup(session: ClientSession, a: str, b: str) -> None:
 
     d2 = await call_tool(session, "agent_deregister", {"agent_id": b})
     report("deregister beta", d2.get("status") in ("deregistered", "ok"), str(d2))
+
+
+async def check_new_tools(session: ClientSession, a: str, b: str) -> None:
+    # message_wait with timeout=0 (non-blocking)
+    wait_result = await call_tool(
+        session,
+        "message_wait",
+        {"agent_id": b, "timeout": 0},
+    )
+    report("message_wait (no-wait)", "waited" in wait_result, str(wait_result))
+
+    # agent_wake: pause then wake
+    paused = await call_tool(session, "agent_pause", {"agent_id": b})
+    report("agent pause for wake test", paused.get("status") == "paused", str(paused))
+
+    woken = await call_tool(
+        session,
+        "agent_wake",
+        {"agent_id": b, "message": "wake-up"},
+    )
+    report("agent_wake", woken.get("status") == "active" and woken.get("message_queued") is True, str(woken))
 
 
 async def run_tests() -> None:
@@ -275,12 +290,12 @@ async def run_tests() -> None:
                 print("--- Pub/Sub ---")
                 await check_pubsub(session, a, b)
 
-                print("--- Heartbeat ---")
-                await check_heartbeat(session, a)
-
                 print("--- Status & Info ---")
                 await check_status(session)
                 await check_info_list(session, a)
+
+                print("--- New Tools (wait, wake) ---")
+                await check_new_tools(session, a, b)
 
                 print("--- Cleanup ---")
                 await check_cleanup(session, a, b)

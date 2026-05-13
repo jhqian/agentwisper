@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Integration-style tests for MCP Server tool functions."""
@@ -75,7 +75,37 @@ async def test_agent_deregister_tool(mock_context):
 
     reg = await agent_register("x", [], ctx=mock_context)
     result = await agent_deregister(reg["agent_id"], ctx=mock_context)
-    assert result["status"] == "deregistered"
+    assert result["status"] == "disconnected"
+    info = await agent_info(reg["agent_id"], ctx=mock_context)
+    assert info["status"] == "disconnected"
+
+
+async def test_agent_register_with_session_name(mock_context):
+    from mcp_server.server import agent_register, agent_info
+
+    result = await agent_register("dev", ["code"], session_name="sess_abc", ctx=mock_context)
+    assert result["status"] == "active"
+    info = await agent_info(result["agent_id"], ctx=mock_context)
+    assert info["session_name"] == "sess_abc"
+
+
+async def test_agent_reconnect_tool(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect, agent_info
+
+    reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
+    await agent_deregister(reg["agent_id"], ctx=mock_context)
+    result = await agent_reconnect("dev", session_name="sess_new", ctx=mock_context)
+    assert result["status"] == "active"
+    assert result["agent_id"] == reg["agent_id"]
+    info = await agent_info(reg["agent_id"], ctx=mock_context)
+    assert info["session_name"] == "sess_new"
+
+
+async def test_agent_reconnect_not_found(mock_context):
+    from mcp_server.server import agent_reconnect
+
+    with pytest.raises(ValueError, match="No disconnected agent"):
+        await agent_reconnect("nonexistent", session_name="sess_1", ctx=mock_context)
 
 
 # ---------------------------------------------------------------------------
@@ -217,50 +247,6 @@ async def test_message_broadcast_tool(mock_context):
     assert polled["total"] >= 1
 
 
-async def test_message_reply_tool(mock_context):
-    from mcp_server.server import (
-        agent_register,
-        message_send,
-        message_poll,
-        message_reply,
-    )
-
-    a1 = await agent_register("caller", [], ctx=mock_context)
-    a2 = await agent_register("responder", [], ctx=mock_context)
-
-    req = await message_send(
-        a1["agent_id"],
-        a2["agent_id"],
-        '{"request": true}',
-        msg_type="rpc_request",
-        ctx=mock_context,
-    )
-
-    reply = await message_reply(
-        req["msg_id"], a2["agent_id"], '{"response": true}', ctx=mock_context
-    )
-    assert "msg_id" in reply
-
-    polled = await message_poll(a1["agent_id"], ctx=mock_context)
-    assert polled["total"] >= 1
-
-
-async def test_message_ack_tool(mock_context):
-    from mcp_server.server import agent_register, message_send, message_poll, message_ack
-
-    r1 = await agent_register("s", [], ctx=mock_context)
-    r2 = await agent_register("r", [], ctx=mock_context)
-
-    msg = await message_send(r1["agent_id"], r2["agent_id"], "hi", ctx=mock_context)
-    polled = await message_poll(r2["agent_id"], ctx=mock_context)
-    assert polled["total"] >= 1
-
-    # Acknowledge the polled message
-    polled_msg = polled["messages"][0]
-    result = await message_ack(polled_msg["msg_id"], ctx=mock_context)
-    assert result["status"] == "acknowledged"
-
-
 async def test_message_query_tool(mock_context):
     from mcp_server.server import agent_register, message_send, message_query
 
@@ -295,16 +281,8 @@ async def test_topic_subscribe_unsubscribe(mock_context):
 
 
 # ---------------------------------------------------------------------------
-# Heartbeat & Health
+# Health
 # ---------------------------------------------------------------------------
-
-
-async def test_heartbeat_tool(mock_context):
-    from mcp_server.server import agent_register, heartbeat
-
-    reg = await agent_register("test", [], ctx=mock_context)
-    result = await heartbeat(reg["agent_id"], ctx=mock_context)
-    assert "last_heartbeat" in result
 
 
 async def test_broker_status_tool(mock_context):
@@ -312,6 +290,49 @@ async def test_broker_status_tool(mock_context):
 
     result = await broker_status(ctx=mock_context)
     assert result["status"] == "healthy"
+
+
+async def test_message_wait_receives_message(mock_context):
+    import asyncio
+    from mcp_server.server import agent_register, message_send, message_wait
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("receiver", [], ctx=mock_context)
+
+    async def send_after_delay():
+        await asyncio.sleep(0.1)
+        await message_send(r1["agent_id"], r2["agent_id"], "delayed hello", ctx=mock_context)
+
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(send_after_delay())
+        result = await message_wait(r2["agent_id"], timeout=5, ctx=mock_context)
+
+    assert result["total"] >= 1
+    assert result["waited"] is True
+    assert result["messages"][0]["payload"] == "delayed hello"
+
+
+async def test_message_wait_returns_immediately_if_pending(mock_context):
+    from mcp_server.server import agent_register, message_send, message_wait
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("receiver", [], ctx=mock_context)
+
+    await message_send(r1["agent_id"], r2["agent_id"], "hello", ctx=mock_context)
+
+    result = await message_wait(r2["agent_id"], timeout=5, ctx=mock_context)
+    assert result["total"] >= 1
+    assert result["waited"] is False
+
+
+async def test_message_wait_timeout(mock_context):
+    from mcp_server.server import agent_register, message_wait
+
+    r = await agent_register("lonely", [], ctx=mock_context)
+
+    result = await message_wait(r["agent_id"], timeout=1, ctx=mock_context)
+    assert result["total"] == 0
+    assert result["waited"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -333,4 +354,4 @@ def test_mcp_instance_has_tools():
     # FastMCP stores tool functions internally; verify the module-level
     # functions are importable and the mcp object exists.
     assert mcp is not None
-    assert mcp.name == "vibe-agentsquad"
+    assert mcp.name == "agentsquad-broker"

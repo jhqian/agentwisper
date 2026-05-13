@@ -5,8 +5,6 @@ from common.config import BrokerConfig, load_config
 def test_default_config():
     config = BrokerConfig()
     assert config.db_path == "agentsquad.db"
-    assert config.heartbeat_interval == 30
-    assert config.heartbeat_timeout == 90
     assert config.rpc_timeout == 30
     assert config.message_poll_limit == 50
     assert config.retention_days == 30

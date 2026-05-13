@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """End-to-end integration tests for agent, squad, and team lifecycle."""
@@ -7,8 +7,6 @@ import pytest
 
 from broker.core import Broker
 from common.config import BrokerConfig
-from common.types import AgentStatus
-from persistence.agent_store import AgentStore
 
 
 @pytest.fixture
@@ -44,42 +42,16 @@ async def test_pause_resume_with_buffered_messages(broker):
     assert len(msgs["messages"]) == 2
 
 
-async def test_disconnect_reconnect(broker):
-    """Agent disconnect, messages buffered, reconnect delivers"""
-    sender = await broker.register_agent("sender", [])
-    agent = await broker.register_agent("test-agent", [])
-
-    # Simulate disconnect via AgentStore directly
-    store = AgentStore(broker._db)
-    await store.update_status(agent["agent_id"], AgentStatus.DISCONNECTED)
-
-    # Send message while disconnected
-    await broker.send_message(
-        sender["agent_id"],
-        agent["agent_id"],
-        '{"msg": "buffered"}',
-        "p2p",
-    )
-
-    # Heartbeat restores disconnected agent to active
-    await broker.agent_heartbeat(agent["agent_id"])
-    info = await broker.get_agent_info(agent["agent_id"])
-    assert info["status"] == "active"
-
-    # Buffered messages should be pollable
-    msgs = await broker.poll_messages(agent["agent_id"])
-    assert len(msgs["messages"]) == 1
-
-
-async def test_deregister_removes_agent(broker):
-    """Deregistered agent is gone"""
+async def test_deregister_soft_deletes_agent(broker):
+    """Deregistered agent becomes disconnected, not removed"""
     agent = await broker.register_agent("temp-agent", [])
     agent_id = agent["agent_id"]
 
     await broker.deregister_agent(agent_id)
 
     info = await broker.get_agent_info(agent_id)
-    assert info is None
+    assert info is not None
+    assert info["status"] == "disconnected"
 
 
 async def test_squad_full_lifecycle(broker):
@@ -145,11 +117,3 @@ async def test_broker_status(broker):
     status = await broker.broker_status()
     assert status["status"] == "healthy"
     assert status["active_agents"] == 2
-
-
-async def test_heartbeat_updates_timestamp(broker):
-    """Heartbeat updates last_heartbeat"""
-    agent = await broker.register_agent("test", [])
-    result = await broker.agent_heartbeat(agent["agent_id"])
-    assert "last_heartbeat" in result
-    assert result["status"] == "active"

@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """System test: squad/team lifecycle, agent state transitions, and message delivery.
@@ -50,6 +50,8 @@ def report(name: str, ok: bool, detail: str = "") -> None:
 async def call_tool(session: ClientSession, name: str, args: dict) -> dict:
     result = await session.call_tool(name, args)
     text = result.content[0].text
+    if result.isError:
+        return {"error": text}
     return json.loads(text)
 
 
@@ -155,57 +157,29 @@ async def check_message_buffering_on_pause(
             str(sent),
         )
 
-    # Poll while paused -- should get 0
+    # Poll while paused -- messages are delivered via poll regardless of pause state
     polled = await call_tool(
         session, "message_poll", {"agent_id": b, "unread_only": True}
     )
     msgs_while_paused = polled.get("messages", [])
     report(
-        "buffer: poll while paused returns 0",
-        len(msgs_while_paused) == 0,
+        "buffer: poll while paused returns 3",
+        len(msgs_while_paused) == 3,
         f"got {len(msgs_while_paused)} messages",
     )
 
-    # Resume and check buffered_count
+    # Resume -- buffered_count reflects messages not yet polled
     resume_res = await call_tool(session, "agent_resume", {"agent_id": b})
-    buffered = resume_res.get("buffered_count", 0)
     report(
-        "buffer: resume reveals buffered_count >= 3",
-        buffered >= 3,
-        f"buffered_count={buffered}",
+        "buffer: resume returns active",
+        resume_res.get("status") == "active",
+        str(resume_res.get("status")),
     )
 
 
 # ---------------------------------------------------------------------------
-# 3. Heartbeat restore (2 checks)
+# 3. Squad lifecycle (4 checks)
 # ---------------------------------------------------------------------------
-
-
-async def check_heartbeat_restore(session: ClientSession, a: str) -> None:
-    """Update agent status to disconnected directly via DB, send heartbeat,
-    verify restored to active."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("UPDATE agents SET status = 'disconnected' WHERE agent_id = ?", (a,))
-    conn.commit()
-    conn.close()
-
-    hb = await call_tool(session, "heartbeat", {"agent_id": a})
-    report(
-        "heartbeat: heartbeat sent ok",
-        "last_heartbeat" in hb,
-        str(hb),
-    )
-
-    info = await call_tool(session, "agent_info", {"agent_id": a})
-    report(
-        "heartbeat: agent restored to active",
-        info is not None and info.get("status") == "active",
-        str(info.get("status")),
-    )
-
-
-# ---------------------------------------------------------------------------
-# 4. Squad lifecycle (4 checks)
 # ---------------------------------------------------------------------------
 
 
@@ -992,6 +966,88 @@ async def check_concurrent_squad_plus_team(
 
 
 # ---------------------------------------------------------------------------
+# 17. Push notification & agent_wake (4 checks)
+# ---------------------------------------------------------------------------
+
+
+async def check_push_and_wake(
+    session: ClientSession, a: str, b: str
+) -> None:
+    """Verify message_wait returns immediately when messages pending.
+    Verify agent_wake resumes paused agent and queues notification message."""
+    # Ensure clean state: leave any squad/team
+    info_b = await call_tool(session, "agent_info", {"agent_id": b})
+    if info_b and info_b.get("squad_id"):
+        await call_tool(session, "squad_leave", {"agent_id": b})
+    if info_b and info_b.get("current_team_id"):
+        await call_tool(
+            session,
+            "team_dismiss",
+            {"team_id": info_b["current_team_id"], "caller_id": b},
+        )
+
+    # Send a message first, then use message_wait with timeout=0
+    sent = await call_tool(
+        session,
+        "message_send",
+        {"sender_id": a, "recipient": b, "payload": "wait-test-msg"},
+    )
+    report(
+        "push+wake: send message for wait test",
+        "msg_id" in sent,
+        str(sent),
+    )
+
+    # message_wait with timeout=0 should return immediately with the message
+    wait_result = await call_tool(
+        session,
+        "message_wait",
+        {"agent_id": b, "timeout": 0},
+    )
+    msgs = wait_result.get("messages", [])
+    report(
+        "push+wake: message_wait returns pending messages",
+        len(msgs) >= 1,
+        f"got {len(msgs)} messages, waited={wait_result.get('waited')}",
+    )
+
+    # Pause agent b, then wake it
+    paused = await call_tool(session, "agent_pause", {"agent_id": b})
+    report(
+        "push+wake: pause agent b",
+        paused.get("status") == "paused",
+        str(paused),
+    )
+
+    woken = await call_tool(
+        session,
+        "agent_wake",
+        {"agent_id": b, "message": "system-wake-notification"},
+    )
+    report(
+        "push+wake: agent_wake resumes and queues message",
+        woken.get("status") == "active" and woken.get("message_queued") is True,
+        str(woken),
+    )
+
+    # Poll b to verify wake message arrived
+    polled = await call_tool(
+        session,
+        "message_poll",
+        {"agent_id": b, "unread_only": True},
+    )
+    wake_msgs = [
+        m for m in polled.get("messages", [])
+        if m.get("payload") == "system-wake-notification"
+    ]
+    report(
+        "push+wake: wake notification message received",
+        len(wake_msgs) >= 1,
+        f"got {len(wake_msgs)} wake messages",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main runner
 # ---------------------------------------------------------------------------
 
@@ -1037,61 +1093,61 @@ async def run_tests() -> None:
                 print("\n--- 2. Message Buffering on Pause ---")
                 await check_message_buffering_on_pause(session, a, b)
 
-                # --- 3. Heartbeat restore ---
-                print("\n--- 3. Heartbeat Restore ---")
-                await check_heartbeat_restore(session, a)
-
-                # --- 4. Squad lifecycle ---
-                print("\n--- 4. Squad Lifecycle ---")
+                # --- 3. Squad lifecycle ---
+                print("\n--- 3. Squad Lifecycle ---")
                 squad_id = await check_squad_lifecycle(session, a, b, c)
 
-                # --- 5. Squad role changes ---
-                print("\n--- 5. Squad Role Changes ---")
+                # --- 4. Squad role changes ---
+                print("\n--- 4. Squad Role Changes ---")
                 await check_squad_role_changes(session, a, b, c, squad_id)
 
-                # --- 6. Observer permissions ---
-                print("\n--- 6. Observer Permissions ---")
+                # --- 5. Observer permissions ---
+                print("\n--- 5. Observer Permissions ---")
                 await check_observer_permissions(session, a, b, c, squad_id)
 
-                # --- 7. Squad messaging ---
-                print("\n--- 7. Squad Messaging ---")
+                # --- 6. Squad messaging ---
+                print("\n--- 6. Squad Messaging ---")
                 await check_squad_messaging(session, a, b, c, squad_id)
 
-                # --- 8. Agent pause in squad ---
-                print("\n--- 8. Agent Pause in Squad ---")
+                # --- 7. Agent pause in squad ---
+                print("\n--- 7. Agent Pause in Squad ---")
                 await check_agent_pause_in_squad(session, a, b)
 
-                # --- 9. Squad dissolve ---
-                print("\n--- 9. Squad Dissolve ---")
+                # --- 8. Squad dissolve ---
+                print("\n--- 8. Squad Dissolve ---")
                 await check_squad_dissolve(session, a, b, c, squad_id)
 
-                # --- 10. Ad-hoc team lifecycle ---
-                print("\n--- 10. Ad-hoc Team Lifecycle ---")
+                # --- 9. Ad-hoc team lifecycle ---
+                print("\n--- 9. Ad-hoc Team Lifecycle ---")
                 team_id = await check_adhoc_team_lifecycle(session, a, b, c)
 
-                # --- 11. Squad + team ---
-                print("\n--- 11. Squad + Team ---")
+                # --- 10. Squad + team ---
+                print("\n--- 10. Squad + Team ---")
                 team_id_2 = await check_squad_plus_team(session, a, b)
 
-                # --- 12. Team exclusive membership ---
-                print("\n--- 12. Team Exclusive Membership ---")
+                # --- 11. Team exclusive membership ---
+                print("\n--- 11. Team Exclusive Membership ---")
                 await check_team_exclusive_membership(session, a, b, team_id_2)
 
-                # --- 13. Team messaging ---
-                print("\n--- 13. Team Messaging ---")
+                # --- 12. Team messaging ---
+                print("\n--- 12. Team Messaging ---")
                 await check_team_messaging(session, a, b, c)
 
-                # --- 14. Subscription scoping ---
-                print("\n--- 14. Subscription Scoping ---")
+                # --- 13. Subscription scoping ---
+                print("\n--- 13. Subscription Scoping ---")
                 await check_subscription_scoping(session, a, b)
 
-                # --- 15. Message query history ---
-                print("\n--- 15. Message Query History ---")
+                # --- 14. Message query history ---
+                print("\n--- 14. Message Query History ---")
                 await check_message_query_history(session, a, b)
 
-                # --- 16. Concurrent squad + team ---
-                print("\n--- 16. Concurrent Squad + Team ---")
+                # --- 15. Concurrent squad + team ---
+                print("\n--- 15. Concurrent Squad + Team ---")
                 await check_concurrent_squad_plus_team(session, a, b)
+
+                # --- 16. Push notification and agent_wake ---
+                print("\n--- 16. Push Notification & Agent Wake ---")
+                await check_push_and_wake(session, a, b)
 
                 # --- Cleanup: deregister all agents ---
                 print("\n--- Cleanup ---")

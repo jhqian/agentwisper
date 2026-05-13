@@ -1,21 +1,24 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Broker core orchestrator wiring all components together."""
 
 from __future__ import annotations
 
+import anyio
+import logging
 from typing import Any
 
+from broker.agent_registry import AgentRegistry
+from broker.router import MessageRouter
+from broker.squad_manager import SquadManager
+from broker.team_manager import TeamManager
 from common.config import BrokerConfig
 from common.types import MessageType
 from persistence.database import AsyncDatabase
 from persistence.subscription_store import SubscriptionStore
-from broker.agent_registry import AgentRegistry
-from broker.heartbeat import HeartbeatMonitor
-from broker.router import MessageRouter
-from broker.squad_manager import SquadManager
-from broker.team_manager import TeamManager
+
+logger = logging.getLogger(__name__)
 
 
 class Broker:
@@ -23,7 +26,7 @@ class Broker:
     unified API for the MCP Server layer.
 
     Delegates each operation to the appropriate manager while managing
-    the shared database connection and heartbeat monitor lifecycle.
+    the shared database connection lifecycle.
     """
 
     def __init__(self, config: BrokerConfig) -> None:
@@ -33,10 +36,8 @@ class Broker:
         self._squad_mgr = SquadManager(self._db)
         self._team_mgr = TeamManager(self._db)
         self._router = MessageRouter(self._db)
-        self._heartbeat = HeartbeatMonitor(
-            self._db, config.heartbeat_interval, config.heartbeat_timeout
-        )
         self._sub_store = SubscriptionStore(self._db)
+        self._wait_events: dict[str, anyio.Event] = {}
         self._started = False
 
     # ------------------------------------------------------------------
@@ -48,16 +49,38 @@ class Broker:
         if self._started:
             return
         await self._db.initialize()
-        await self._heartbeat.start()
         self._started = True
 
     async def stop(self) -> None:
         """Stop background services and close database."""
         if not self._started:
             return
-        await self._heartbeat.stop()
         await self._db.close()
         self._started = False
+
+    # ------------------------------------------------------------------
+    # Notification dispatch
+    # ------------------------------------------------------------------
+
+    async def _notify_recipients(self, recipient_ids: list[str]) -> None:
+        """Wake any waiting message_wait callers."""
+        for agent_id in recipient_ids:
+            try:
+                event = self._wait_events.get(agent_id)
+                if event is not None:
+                    event.set()
+            except Exception:
+                logger.exception("Failed to notify agent %s", agent_id)
+
+    def register_wait(self, agent_id: str) -> anyio.Event:
+        """Register an anyio.Event for message_wait. Returns the event."""
+        event = anyio.Event()
+        self._wait_events[agent_id] = event
+        return event
+
+    def unregister_wait(self, agent_id: str) -> None:
+        """Remove wait event after message_wait completes."""
+        self._wait_events.pop(agent_id, None)
 
     # ------------------------------------------------------------------
     # Agent operations  (delegates to AgentRegistry)
@@ -68,13 +91,23 @@ class Broker:
         name: str,
         capabilities: list[str],
         metadata: dict[str, Any] | None = None,
+        session_name: str | None = None,
     ) -> dict:
-        agent_id = await self._registry.register(name, capabilities, metadata)
-        return {"agent_id": agent_id, "status": "active"}
+        result = await self._registry.register(name, capabilities, metadata, session_name=session_name)
+        return {
+            "agent_id": result["agent_id"],
+            "assigned_name": result["assigned_name"],
+            "status": "active",
+        }
 
     async def deregister_agent(self, agent_id: str) -> dict:
+        self.unregister_wait(agent_id)
         await self._registry.deregister(agent_id)
-        return {"status": "deregistered"}
+        return {"status": "disconnected"}
+
+    async def reconnect_agent(self, name: str, session_name: str | None = None) -> dict:
+        """Reconnect a disconnected agent by name."""
+        return await self._registry.reconnect(name, session_name=session_name)
 
     async def pause_agent(self, agent_id: str) -> dict:
         await self._registry.pause(agent_id)
@@ -83,10 +116,30 @@ class Broker:
     async def resume_agent(self, agent_id: str) -> dict:
         return await self._registry.resume(agent_id)
 
-    async def agent_heartbeat(self, agent_id: str) -> dict:
-        await self._registry.heartbeat(agent_id)
+    async def wake_agent(self, agent_id: str, message: str | None = None) -> dict:
+        """Wake a paused agent and optionally inject a message.
+
+        Resumes the agent to active status, then if message is provided,
+        sends it as a P2P message from the system.
+        """
         info = await self._registry.get_info(agent_id)
-        return {"last_heartbeat": info["last_heartbeat"], "status": info["status"]}
+        if info is None:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        if info["status"] != "active":
+            await self._registry.resume(agent_id)
+
+        message_queued = False
+        if message:
+            await self._router.send_message(
+                sender_id="system",
+                recipient=agent_id,
+                payload=message,
+                msg_type=MessageType.NOTIFICATION,
+            )
+            message_queued = True
+
+        return {"status": "active", "message_queued": message_queued}
 
     async def get_agent_info(self, agent_id: str) -> dict | None:
         return await self._registry.get_info(agent_id)
@@ -178,9 +231,12 @@ class Broker:
         msg_type: str = "p2p",
         squad_id: str | None = None,
     ) -> dict:
-        return await self._router.send_message(
+        result = await self._router.send_message(
             sender_id, recipient, payload, MessageType(msg_type), squad_id
         )
+        recipient_id = result.get("recipient_id", recipient)
+        await self._notify_recipients([recipient_id])
+        return result
 
     async def broadcast_message(
         self,
@@ -189,28 +245,19 @@ class Broker:
         payload: str,
         squad_id: str | None = None,
     ) -> dict:
-        return await self._router.broadcast_message(
+        result = await self._router.broadcast_message(
             sender_id, topic, payload, squad_id
         )
-
-    async def reply_message(
-        self, parent_msg_id: str, sender_id: str, payload: str
-    ) -> dict:
-        return await self._router.reply_message(parent_msg_id, sender_id, payload)
+        subscriber_ids = result.get("subscriber_ids", [])
+        if subscriber_ids:
+            await self._notify_recipients(subscriber_ids)
+        return result
 
     async def poll_messages(
         self, agent_id: str, limit: int = 50, unread_only: bool = True
     ) -> dict:
         messages = await self._router.poll_messages(agent_id, limit, unread_only)
         return {"messages": messages}
-
-    async def acknowledge_message(self, msg_id: str) -> dict:
-        await self._router.acknowledge_message(msg_id)
-        return {"status": "acknowledged"}
-
-    async def acknowledge_delivery(self, delivery_id: str) -> dict:
-        await self._router.acknowledge_delivery(delivery_id)
-        return {"status": "acknowledged"}
 
     # ------------------------------------------------------------------
     # Subscription operations  (delegates to SubscriptionStore)
@@ -232,7 +279,10 @@ class Broker:
 
     async def broker_status(self) -> dict:
         agents = await self._registry.list_agents()
+        pending = await self._router.count_pending_messages()
         return {
             "status": "healthy" if self._started else "stopped",
             "active_agents": len(agents),
+            "pending_messages": pending,
+            "waiting_agents": len(self._wait_events),
         }

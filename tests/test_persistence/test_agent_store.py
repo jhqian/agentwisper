@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for AgentStore CRUD and lifecycle operations."""
@@ -49,11 +49,50 @@ async def test_update_status(store):
     assert agent["status"] == "paused"
 
 
-async def test_update_heartbeat(store):
+async def test_update_status_disconnected(store):
     agent_id = await store.create(name="test", capabilities=[])
-    await store.update_heartbeat(agent_id, "2026-05-09T10:00:30Z")
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
     agent = await store.get(agent_id)
-    assert agent["last_heartbeat"] == "2026-05-09T10:00:30Z"
+    assert agent["status"] == "disconnected"
+
+
+async def test_create_with_session_name(store):
+    agent_id = await store.create(name="dev", capabilities=["code"], session_name="sess_abc")
+    agent = await store.get(agent_id)
+    assert agent["session_name"] == "sess_abc"
+
+
+async def test_create_without_session_name(store):
+    agent_id = await store.create(name="dev", capabilities=["code"])
+    agent = await store.get(agent_id)
+    assert agent["session_name"] is None
+
+
+async def test_update_session_name(store):
+    agent_id = await store.create(name="dev", capabilities=["code"])
+    await store.update_session_name(agent_id, "sess_new")
+    agent = await store.get(agent_id)
+    assert agent["session_name"] == "sess_new"
+
+
+async def test_get_disconnected_by_name(store):
+    agent_id = await store.create(name="dev", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    result = await store.get_disconnected_by_name("dev")
+    assert result is not None
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "disconnected"
+
+
+async def test_get_disconnected_by_name_not_found_when_active(store):
+    await store.create(name="dev", capabilities=["code"])
+    result = await store.get_disconnected_by_name("dev")
+    assert result is None
+
+
+async def test_get_disconnected_by_name_nonexistent(store):
+    result = await store.get_disconnected_by_name("nonexistent")
+    assert result is None
 
 
 async def test_set_squad(store):
@@ -100,3 +139,38 @@ async def test_list_agents_by_squad(store):
     agents = await store.list_by_squad("squad_x")
     assert len(agents) == 1
     assert agents[0]["agent_id"] == a1
+
+
+async def test_find_names_by_prefix_exact(store):
+    await store.create(name="dev", capabilities=[])
+    names = await store.find_names_by_prefix("dev")
+    assert names == ["dev"]
+
+
+async def test_find_names_by_prefix_with_suffixes(store):
+    await store.create(name="dev", capabilities=[])
+    await store.create(name="dev-1", capabilities=[])
+    await store.create(name="dev-2", capabilities=[])
+    names = await store.find_names_by_prefix("dev")
+    assert sorted(names) == ["dev", "dev-1", "dev-2"]
+
+
+async def test_find_names_by_prefix_no_match(store):
+    await store.create(name="test", capabilities=[])
+    names = await store.find_names_by_prefix("dev")
+    assert names == []
+
+
+async def test_find_names_by_prefix_does_not_overmatch(store):
+    """LIKE 'dev-%' matches 'dev-team' but that name is returned too."""
+    await store.create(name="dev", capabilities=[])
+    await store.create(name="dev-team", capabilities=[])
+    names = await store.find_names_by_prefix("dev")
+    assert sorted(names) == ["dev", "dev-team"]
+
+
+async def test_find_names_includes_disconnected(store):
+    agent_id = await store.create(name="dev", capabilities=[])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    names = await store.find_names_by_prefix("dev")
+    assert names == ["dev"]

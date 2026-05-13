@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Agent store providing CRUD and lifecycle operations for agents."""
@@ -33,13 +33,14 @@ class AgentStore:
         name: str,
         capabilities: list[str],
         metadata: dict[str, Any] | None = None,
+        session_name: str | None = None,
     ) -> str:
         """Create a new agent record. Returns the generated agent_id."""
         agent_id = _generate_agent_id()
         now = _now_iso()
         await self._db.execute(
-            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, metadata) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, session_name, metadata) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 agent_id,
                 name,
@@ -47,6 +48,7 @@ class AgentStore:
                 json.dumps(capabilities),
                 now,
                 now,
+                session_name,
                 json.dumps(metadata or {}),
             ),
         )
@@ -64,6 +66,14 @@ class AgentStore:
             "SELECT * FROM agents WHERE name = ? LIMIT 1", (name,)
         )
 
+    async def find_names_by_prefix(self, prefix: str) -> list[str]:
+        """Return all agent names matching prefix, including disconnected."""
+        rows = await self._db.execute_fetchall(
+            "SELECT name FROM agents WHERE name = ? OR name LIKE ?",
+            (prefix, f"{prefix}-%"),
+        )
+        return [row["name"] for row in rows]
+
     async def update_status(self, agent_id: str, status: AgentStatus) -> None:
         """Update agent status."""
         await self._db.execute(
@@ -71,11 +81,18 @@ class AgentStore:
             (status, agent_id),
         )
 
-    async def update_heartbeat(self, agent_id: str, timestamp: str) -> None:
-        """Update agent last heartbeat timestamp."""
+    async def update_session_name(self, agent_id: str, session_name: str | None) -> None:
+        """Update agent session_name."""
         await self._db.execute(
-            "UPDATE agents SET last_heartbeat = ? WHERE agent_id = ?",
-            (timestamp, agent_id),
+            "UPDATE agents SET session_name = ? WHERE agent_id = ?",
+            (session_name, agent_id),
+        )
+
+    async def get_disconnected_by_name(self, name: str) -> dict[str, Any] | None:
+        """Find a disconnected agent by exact name."""
+        return await self._db.execute_fetchone(
+            "SELECT * FROM agents WHERE name = ? AND status = ?",
+            (name, AgentStatus.DISCONNECTED),
         )
 
     async def set_squad(self, agent_id: str, squad_id: str | None) -> None:

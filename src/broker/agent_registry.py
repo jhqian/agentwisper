@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import re
 from typing import Any
 
 from persistence.database import AsyncDatabase
@@ -25,29 +25,61 @@ class AgentRegistry:
         self._message_store = MessageStore(db)
         self._db = db
 
+    async def _resolve_unique_name(self, name: str) -> str:
+        """Resolve a unique agent name, appending -N suffix on collision."""
+        existing = await self._agent_store.find_names_by_prefix(name)
+        if name not in existing:
+            return name
+        pattern = re.compile(rf"^{re.escape(name)}-(\d+)$")
+        max_suffix = 0
+        for n in existing:
+            m = pattern.match(n)
+            if m:
+                max_suffix = max(max_suffix, int(m.group(1)))
+        return f"{name}-{max_suffix + 1}"
+
     async def register(
         self,
         name: str,
         capabilities: list[str],
         metadata: dict[str, Any] | None = None,
-    ) -> str:
-        """Register a new agent. Returns the generated agent_id."""
-        return await self._agent_store.create(name, capabilities, metadata)
+        session_name: str | None = None,
+    ) -> dict[str, str]:
+        """Register a new agent. Returns agent_id and assigned_name."""
+        assigned_name = await self._resolve_unique_name(name)
+        agent_id = await self._agent_store.create(
+            assigned_name, capabilities, metadata, session_name=session_name
+        )
+        return {"agent_id": agent_id, "assigned_name": assigned_name}
 
     async def deregister(self, agent_id: str) -> None:
-        """Remove an agent from the registry.
-
-        Raises ValueError if the agent does not exist.
-        """
+        """Soft-delete: set status to disconnected, preserve all relationships."""
         agent = await self._agent_store.get(agent_id)
         if agent is None:
             raise ValueError(f"Agent {agent_id} not found")
-        await self._db.execute("DELETE FROM squad_memberships WHERE agent_id = ?", (agent_id,))
-        await self._db.execute("DELETE FROM team_memberships WHERE agent_id = ?", (agent_id,))
-        await self._db.execute("DELETE FROM subscriptions WHERE agent_id = ?", (agent_id,))
-        await self._db.execute("UPDATE agents SET squad_id = NULL WHERE agent_id = ?", (agent_id,))
-        await self._db.execute("UPDATE agents SET current_team_id = NULL WHERE agent_id = ?", (agent_id,))
-        await self._agent_store.delete(agent_id)
+        await self._agent_store.update_status(agent_id, AgentStatus.DISCONNECTED)
+        await self._agent_store.update_session_name(agent_id, None)
+
+    async def reconnect(self, name: str, session_name: str | None = None) -> dict[str, Any]:
+        """Reconnect a disconnected agent by name.
+
+        Restores agent to active status with same agent_id.
+        Returns agent_id, assigned_name, status, and buffered_count.
+        """
+        agent = await self._agent_store.get_disconnected_by_name(name)
+        if agent is None:
+            raise ValueError(f"No disconnected agent with name '{name}' found")
+        agent_id = agent["agent_id"]
+        await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
+        if session_name:
+            await self._agent_store.update_session_name(agent_id, session_name)
+        buffered = await self._message_store.get_pending_for_agent(agent_id)
+        return {
+            "agent_id": agent_id,
+            "assigned_name": name,
+            "status": "active",
+            "buffered_count": len(buffered),
+        }
 
     async def get_info(self, agent_id: str) -> dict[str, Any] | None:
         """Retrieve agent information by ID."""
@@ -85,39 +117,21 @@ class AgentRegistry:
         buffered = await self._message_store.get_pending_for_agent(agent_id)
         return {"status": "active", "buffered_count": len(buffered)}
 
-    async def disconnect(self, agent_id: str) -> None:
-        """Mark an agent as disconnected (heartbeat timeout)."""
-        await self._agent_store.update_status(
-            agent_id, AgentStatus.DISCONNECTED
-        )
-
-    async def reconnect(self, agent_id: str) -> None:
-        """Reconnect a disconnected agent back to active."""
-        await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
-
-    async def heartbeat(self, agent_id: str) -> None:
-        """Update agent heartbeat timestamp and restore disconnected agents.
-
-        A heartbeat proves the agent is alive, so disconnected agents are
-        automatically restored to active status.
-        """
-        agent = await self._agent_store.get(agent_id)
-        if agent is not None and agent["status"] == AgentStatus.DISCONNECTED:
-            await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
-        now = datetime.now(timezone.utc).isoformat()
-        await self._agent_store.update_heartbeat(agent_id, now)
-
     async def resolve_recipient(self, name_or_id: str) -> str | None:
         """Resolve a recipient identifier to an agent_id.
 
         Tries exact agent_id match first, then falls back to name lookup.
-        Returns None if no match found.
+        Returns None if no match found or agent is disconnected.
         """
         agent = await self._agent_store.get(name_or_id)
         if agent is not None:
+            if agent["status"] == AgentStatus.DISCONNECTED:
+                return None
             return agent["agent_id"]
         agent = await self._agent_store.get_by_name(name_or_id)
         if agent is not None:
+            if agent["status"] == AgentStatus.DISCONNECTED:
+                return None
             return agent["agent_id"]
         return None
 

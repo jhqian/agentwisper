@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for MessageRouter P2P, RPC, and Pub/Sub message routing."""
@@ -77,22 +77,22 @@ async def test_p2p_send_to_paused_agent(router, agent_store):
     assert result["msg_id"].startswith("msg_")
 
 
-async def test_rpc_request_and_reply(router, agent_store):
+async def test_rpc_request_and_response(router, agent_store):
     sender = await agent_store.create(name="caller", capabilities=[])
     receiver = await agent_store.create(name="worker", capabilities=[])
     req = await router.send_message(
         sender_id=sender, recipient=receiver,
         payload='{"task": "build"}', msg_type=MessageType.RPC_REQUEST
     )
-    resp = await router.reply_message(
-        parent_msg_id=req["msg_id"], sender_id=receiver,
-        payload='{"result": "ok"}'
+    # Respond using send (receiver replies to sender directly)
+    resp = await router.send_message(
+        sender_id=receiver, recipient=sender,
+        payload='{"result": "ok"}', msg_type=MessageType.P2P
     )
     assert resp["msg_id"].startswith("msg_")
     # Original sender should get the response
     messages = await router.poll_messages(sender)
     assert len(messages) >= 1
-    assert messages[0]["parent_msg_id"] == req["msg_id"]
 
 
 async def test_pubsub_broadcast(router, agent_store, sub_store):
@@ -131,19 +131,23 @@ async def test_pubsub_squad_scoped(router, agent_store, sub_store, squad_store):
     assert result["subscriber_count"] >= 1
 
 
-async def test_acknowledge_message(router, agent_store):
+async def test_poll_auto_acknowledges_direct_message(router, agent_store):
     sender = await agent_store.create(name="sender", capabilities=[])
     receiver = await agent_store.create(name="receiver", capabilities=[])
     result = await router.send_message(
         sender_id=sender, recipient=receiver,
         payload='{}', msg_type=MessageType.P2P
     )
-    # Poll first to get delivered status
+    # Poll should auto-acknowledge (status goes pending -> acknowledged)
     await router.poll_messages(receiver)
-    await router.acknowledge_message(result["msg_id"])
+    msg = await router._message_store.get(result["msg_id"])
+    assert msg["status"] == "acknowledged"
+    # Second poll should return empty (message no longer pending)
+    msgs = await router.poll_messages(receiver)
+    assert len(msgs) == 0
 
 
-async def test_acknowledge_delivery(router, agent_store, sub_store):
+async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
     sender = await agent_store.create(name="publisher", capabilities=[])
     subscriber = await agent_store.create(name="sub", capabilities=[])
     await sub_store.create(agent_id=subscriber, topic="events")
@@ -153,4 +157,7 @@ async def test_acknowledge_delivery(router, agent_store, sub_store):
     assert len(msgs) >= 1
     delivery_id = msgs[0].get("delivery_id")
     if delivery_id:
-        await router.acknowledge_delivery(delivery_id)
+        dlv = await router._message_store._db.execute_fetchone(
+            "SELECT * FROM delivery_logs WHERE delivery_id = ?", (delivery_id,)
+        )
+        assert dlv["status"] == "acknowledged"

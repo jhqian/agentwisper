@@ -1,4 +1,4 @@
-# Copyright 2026 vibe-agentsquad contributors
+# Copyright 2026 agentsquad contributors
 # Licensed under the Apache License, Version 2.0
 
 """Message router orchestrating P2P, RPC, and Pub/Sub message routing."""
@@ -50,7 +50,10 @@ class MessageRouter:
 
         Observers are not allowed to send messages. Only enforced when
         squad_id is provided and the sender is a member of that squad.
+        System messages bypass all permission checks.
         """
+        if sender_id == "system":
+            return
         if squad_id is None:
             return
         role = await self._squad_store.get_member_role(squad_id, sender_id)
@@ -96,7 +99,7 @@ class MessageRouter:
             payload=payload,
             squad_id=squad_id,
         )
-        return {"msg_id": msg_id, "status": "pending"}
+        return {"msg_id": msg_id, "status": "pending", "recipient_id": recipient_id}
 
     async def broadcast_message(
         self,
@@ -156,44 +159,11 @@ class MessageRouter:
         if subscriber_ids:
             await self._message_store.create_delivery_logs(msg_id, subscriber_ids)
 
-        return {"msg_id": msg_id, "subscriber_count": len(subscriber_ids)}
-
-    async def reply_message(
-        self,
-        parent_msg_id: str,
-        sender_id: str,
-        payload: str,
-    ) -> dict[str, Any]:
-        """Reply to an RPC request message.
-
-        Looks up the parent message to find the original sender, then creates
-        a response message linked via parent_msg_id.
-
-        Args:
-            parent_msg_id: ID of the original request message.
-            sender_id: ID of the agent sending the reply.
-            payload: Reply payload as string.
-
-        Returns:
-            Dict with msg_id and status.
-
-        Raises:
-            ValueError: If parent message not found.
-        """
-        parent = await self._message_store.get(parent_msg_id)
-        if parent is None:
-            raise ValueError(f"Parent message {parent_msg_id} not found")
-
-        original_sender = parent["sender_id"]
-
-        msg_id = await self._message_store.create(
-            sender_id=sender_id,
-            recipient_id=original_sender,
-            msg_type=MessageType.RPC_RESPONSE,
-            payload=payload,
-            parent_msg_id=parent_msg_id,
-        )
-        return {"msg_id": msg_id, "status": "pending"}
+        return {
+            "msg_id": msg_id,
+            "subscriber_count": len(subscriber_ids),
+            "subscriber_ids": subscriber_ids,
+        }
 
     async def poll_messages(
         self,
@@ -225,13 +195,15 @@ class MessageRouter:
             agent_id, limit=limit
         )
 
-        # Mark all direct messages as delivered
+        # Mark all direct messages as delivered and acknowledged
         for msg in direct_messages:
             await self._message_store.mark_delivered(msg["msg_id"])
+            await self._message_store.mark_acknowledged(msg["msg_id"])
 
-        # Mark all delivery logs as delivered
+        # Mark all delivery logs as delivered and acknowledged
         for dlv in delivery_messages:
             await self._message_store.mark_delivery_delivered(dlv["delivery_id"])
+            await self._message_store.mark_delivery_acknowledged(dlv["delivery_id"])
 
         # Combine results: direct messages first, then delivery log entries
         combined: list[dict[str, Any]] = []
@@ -240,18 +212,6 @@ class MessageRouter:
 
         return combined
 
-    async def acknowledge_message(self, msg_id: str) -> None:
-        """Acknowledge a direct message by marking it as acknowledged.
-
-        Args:
-            msg_id: ID of the message to acknowledge.
-        """
-        await self._message_store.mark_acknowledged(msg_id)
-
-    async def acknowledge_delivery(self, delivery_id: str) -> None:
-        """Acknowledge a delivery log entry by marking it as acknowledged.
-
-        Args:
-            delivery_id: ID of the delivery log entry to acknowledge.
-        """
-        await self._message_store.mark_delivery_acknowledged(delivery_id)
+    async def count_pending_messages(self) -> int:
+        """Count all pending messages across all agents."""
+        return await self._message_store.count_pending()
