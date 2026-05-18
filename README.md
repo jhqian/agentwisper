@@ -1,15 +1,15 @@
-# Vibe AgentSquad
+# agentsquad
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 ## Overview
 
-Vibe AgentSquad is a multi-agent communication platform that provides a central broker for agent coordination, message routing, and team management. It exposes 28 MCP tools across 6 categories through a FastMCP server interface, supporting both stdio and HTTP transports. Agents communicate via P2P messaging, RPC, or Pub/Sub patterns with full SQLite WAL persistence.
+agentsquad is a multi-agent communication platform that provides a central broker for agent coordination, message routing, and team management. It exposes 28 MCP tools across 6 categories through a FastMCP server with streamable-http transport. Agents communicate via P2P messaging, RPC, or Pub/Sub patterns with full SQLite WAL persistence.
 
 ## Architecture
 
 ```
-                    MCP (stdio/SSE/HTTP)
+                    MCP (streamable-http)
                          |
                     +----+----+
                     |   MCP   |
@@ -42,12 +42,11 @@ Vibe AgentSquad is a multi-agent communication platform that provides a central 
 
 - **Central Broker** -- single-process message broker with SQLite WAL persistence
 - **28 MCP Tools** -- agent management, squad operations, ad-hoc teams, messaging, subscriptions, health
-- **Multiple Transports** -- stdio, SSE, and streamable HTTP via FastMCP
 - **Communication Patterns** -- P2P direct messaging, RPC request/response, Pub/Sub topic subscriptions
 - **Squad Model** -- persistent named groups with role-based membership and shared state
 - **Ad-hoc Teams** -- lightweight temporary groups created from multiple squads
 - **Heartbeat Monitoring** -- automatic agent liveness detection with configurable intervals
-- **Message Polling** -- agents pull messages at their own pace with configurable batch sizes
+- **Message Polling & Wait** -- agents poll or block-wait for messages with `anyio.Event` zero-latency notification
 - **Retention Policy** -- automatic cleanup of expired messages and stale agents
 
 ## Quick Start
@@ -56,81 +55,33 @@ Vibe AgentSquad is a multi-agent communication platform that provides a central 
 # Install dependencies
 uv sync
 
-# Start the broker (stdio mode, default)
-uv run vibe-broker start
-
-# Start the broker (HTTP mode)
-AGENTSQUAD_TRANSPORT=http uv run vibe-broker start
+# Start the broker on port 8000
+uv run agentsquad-broker start
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for the full walkthrough.
+For the full walkthrough, see [QUICKSTART.md](QUICKSTART.md).
 
 ## Client Configuration
 
-### Transport Comparison
+### Claude Code (recommended: plugin)
 
-| Transport | Protocol | Best For | Multi-Client |
-|-----------|----------|----------|:------------:|
-| stdio | stdin/stdout | Single agent, local dev | No |
-| SSE | HTTP + Server-Sent Events | Web dashboards, browsers | Yes |
-| HTTP | HTTP POST | Multi-agent, production | Yes |
+Install the [agentsquad plugin](https://github.com/jhqian/agentsquad-plugin):
 
-### Claude Code
-
-Stdio (add to `.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "vibe-broker": {
-      "command": "uv",
-      "args": ["run", "vibe-broker", "start"],
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
-    }
-  }
-}
+```bash
+claude plugin add <marketplace>/agentsquad
 ```
 
-HTTP (add to `.claude/settings.json`):
+This provides 10 slash commands (`/agentsquad:register`, `/agentsquad:send`, etc.) and connects to the broker automatically.
+
+### Claude Code (manual HTTP config)
+
+Add to `.claude/settings.json` or `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "vibe-broker": {
+    "agentsquad-broker": {
       "type": "http",
-      "url": "http://localhost:8000/mcp"
-    }
-  }
-}
-```
-
-### OpenCode
-
-Stdio (add to OpenCode config):
-
-```json
-{
-  "mcp": {
-    "vibe-broker": {
-      "type": "local",
-      "command": ["uv", "run", "vibe-broker", "start"],
-      "env": {
-        "PYTHONUNBUFFERED": "1"
-      }
-    }
-  }
-}
-```
-
-HTTP (add to OpenCode config):
-
-```json
-{
-  "mcp": {
-    "vibe-broker": {
-      "type": "remote",
       "url": "http://localhost:8000/mcp"
     }
   }
@@ -139,77 +90,71 @@ HTTP (add to OpenCode config):
 
 ### Codex
 
-Stdio:
-
 ```bash
-codex mcp add vibe-broker --transport stdio --command "uv run vibe-broker start"
-```
-
-HTTP:
-
-```bash
-codex mcp add vibe-broker --transport streamable_http --url "http://localhost:8000/mcp"
+codex mcp add agentsquad-broker --transport streamable_http --url "http://localhost:8000/mcp"
 ```
 
 ## MCP Tools Reference
 
-### Agent Management (6 tools)
+### Agent Management (7 tools)
 
 | Tool | Description |
 |------|-------------|
-| `register_agent` | Register a new agent with name, description, and capabilities |
-| `deregister_agent` | Remove an agent and clean up its subscriptions |
-| `list_agents` | List all registered agents with optional status filtering |
-| `get_agent_info` | Get detailed information about a specific agent |
-| `agent_heartbeat` | Send a heartbeat signal to maintain agent liveness |
-| `update_agent` | Update agent metadata (description, capabilities, status) |
+| `agent_register` | Register a new agent with name and capabilities |
+| `agent_deregister` | Remove an agent and clean up its subscriptions |
+| `agent_list` | List all registered agents |
+| `agent_info` | Get detailed information about a specific agent |
+| `agent_pause` | Pause an agent (buffer messages) |
+| `agent_resume` | Resume a paused agent |
+| `agent_wake` | Wake a paused agent and optionally inject a message |
 
 ### Squad Management (8 tools)
 
 | Tool | Description |
 |------|-------------|
-| `create_squad` | Create a named squad with description and configuration |
-| `dissolve_squad` | Dissolve a squad and remove all memberships |
-| `list_squads` | List all squads with optional filtering |
-| `get_squad_info` | Get squad details including member list |
-| `join_squad` | Add an agent to a squad with an optional role |
-| `leave_squad` | Remove an agent from a squad |
-| `update_squad` | Update squad metadata (name, description, configuration) |
-| `list_squad_members` | List all members of a specific squad with roles |
+| `squad_create` | Create a named squad (creator becomes leader) |
+| `squad_dissolve` | Dissolve a squad (leader only) |
+| `squad_list` | List all active squads |
+| `squad_info` | Get squad details including member list |
+| `squad_join` | Add an agent to a squad (leader only) |
+| `squad_leave` | Remove an agent from a squad |
+| `squad_kick` | Remove a member from squad (leader only) |
+| `squad_set_role` | Change a member's role (leader only) |
 
 ### Ad-hoc Team (4 tools)
 
 | Tool | Description |
 |------|-------------|
-| `form_team` | Create a temporary team from agents across multiple squads |
-| `disband_team` | Disband an ad-hoc team |
-| `list_teams` | List all active ad-hoc teams |
-| `get_team_info` | Get team composition and purpose |
+| `team_form` | Create a temporary team from agents |
+| `team_dismiss` | Dismiss an ad-hoc team |
+| `team_list` | List all active ad-hoc teams |
+| `team_info` | Get team composition and purpose |
 
-### Messaging (6 tools)
+### Messaging (7 tools)
 
 | Tool | Description |
 |------|-------------|
-| `send_message` | Send a P2P message to a specific agent |
-| `broadcast_to_squad` | Broadcast a message to all members of a squad |
-| `call_agent` | Send an RPC request and wait for a response |
-| `respond_to_call` | Respond to a pending RPC request |
-| `poll_messages` | Poll for pending messages (P2P, RPC, broadcast) |
-| `get_message_history` | Retrieve message history with optional filtering |
+| `message_send` | Send a P2P or RPC message to a specific agent |
+| `message_broadcast` | Broadcast a message to topic subscribers |
+| `message_reply` | Reply to an RPC request |
+| `message_poll` | Poll for pending messages |
+| `message_wait` | Block until messages arrive (zero-latency via anyio.Event) |
+| `message_ack` | Acknowledge message delivery |
+| `message_query` | Query message history with filters |
 
 ### Subscription (2 tools)
 
 | Tool | Description |
 |------|-------------|
-| `subscribe` | Subscribe an agent to a topic for Pub/Sub messaging |
-| `unsubscribe` | Unsubscribe an agent from a topic |
+| `topic_subscribe` | Subscribe an agent to a topic |
+| `topic_unsubscribe` | Unsubscribe from a topic |
 
 ### Health (2 tools)
 
 | Tool | Description |
 |------|-------------|
-| `health_check` | Get broker health status including uptime and statistics |
-| `ping` | Lightweight liveness check |
+| `heartbeat` | Signal agent is alive |
+| `broker_status` | Get broker health, agent count, queue depth |
 
 ## Configuration
 
@@ -223,8 +168,7 @@ Environment variables use the `AGENTSQUAD_` prefix:
 | `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
 | `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
 | `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
-| `AGENTSQUAD_TRANSPORT` | `stdio` | Transport mode: `stdio`, `sse`, or `http` |
-| `AGENTSQUAD_HTTP_PORT` | `8000` | Port for HTTP/SSE transport |
+| `AGENTSQUAD_HTTP_PORT` | `8000` | Port for streamable-http transport |
 
 ## Communication Patterns
 
@@ -235,10 +179,10 @@ Direct message from one agent to another. Best for targeted requests and respons
 ```
 Agent A                          Broker                          Agent B
   |                                |                                |
-  |--- send_message(to=B) -------->|                                |
+  |--- message_send(to=B) ------->|                                |
   |                                |-- store message -------------->|
   |                                |                                |
-  |                                |<-------- poll_messages() ------|
+  |                                |<-------- message_poll() -------|
   |                                |--- deliver message ----------->|
   |                                |                                |
 ```
@@ -250,13 +194,13 @@ Synchronous request/response with timeout. Caller blocks until responder replies
 ```
 Agent A                          Broker                          Agent B
   |                                |                                |
-  |--- call_agent(target=B) ------>|                                |
-  |    (blocks until response)     |-- store RPC request ----------->|
+  |--- message_send(type=rpc) ---->|                                |
+  |                                |-- store RPC request ----------->|
   |                                |                                |
-  |                                |<--- poll_messages() ------------|
+  |                                |<--- message_poll() -------------|
   |                                |--- deliver request ----------->|
   |                                |                                |
-  |                                |<--- respond_to_call() ---------|
+  |                                |<--- message_reply() -----------|
   |<-- RPC response ---------------|                                |
   |                                |                                |
 ```
@@ -268,7 +212,7 @@ Topic-based broadcasting. Subscribers receive messages posted to topics they fol
 ```
 Publisher                        Broker                          Subscriber
   |                                |                                |
-  |--- send_message(topic=X) ----->|                                |
+  |--- message_broadcast(topic=X)->|                                |
   |                                |-- lookup subscribers --------->|
   |                                |                                |
   |                                |       Subscriber A             Subscriber B
@@ -281,12 +225,12 @@ Publisher                        Broker                          Subscriber
 | Aspect | Squad | Ad-hoc Team |
 |--------|-------|-------------|
 | Lifetime | Persistent | Temporary |
-| Creation | `create_squad` | `form_team` |
+| Creation | `squad_create` | `team_form` |
 | Membership | Agents join/leave | Specified at creation |
 | Roles | Per-member roles | Flat membership |
 | Communication | Broadcast to squad | Broadcast to team |
 | Use case | Long-running teams, departments | Task forces, cross-squad projects |
-| Cleanup | Explicit `dissolve_squad` | Explicit `disband_team` |
+| Cleanup | Explicit `squad_dissolve` | Explicit `team_dismiss` |
 
 ## Development
 
@@ -294,15 +238,14 @@ Publisher                        Broker                          Subscriber
 # Run all tests
 uv run pytest
 
-# Run with coverage
-uv run pytest --cov=src
+# Run specific test layer
+uv run pytest tests/test_broker/
 
-# Run specific test file
-uv run pytest tests/test_broker.py
+# Smoke test (MCP client integration)
+uv run python tests/smoke_test.py
 
-# Lint
-uv run ruff check src/
-uv run mypy src/
+# System test (lifecycle & messaging)
+uv run python tests/system_test.py
 ```
 
 ### Project Structure
@@ -310,12 +253,13 @@ uv run mypy src/
 ```
 agentsquad/
   src/
-    agentsquad/
-      broker/          # Broker core (router, registry, manager)
-      mcp/             # MCP server and tool definitions
-      db/              # SQLite persistence layer
-      models/          # Data models and types
-  tests/               # Test suite
+    common/              # Types, config
+    persistence/         # Database, stores
+    broker/              # Registry, managers, router, heartbeat, core
+    mcp_server/          # FastMCP tools (28 tools)
+    cli/                 # Click CLI entry point
+  tests/                 # Test suite (182 unit tests)
+  samples/               # Demo scripts and slash commands
 ```
 
 ## License
