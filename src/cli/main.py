@@ -21,14 +21,21 @@ def cli() -> None:
     type=int,
     help="HTTP port for the broker server",
 )
-def start(port: int) -> None:
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    type=str,
+    help="Host address to bind (use 0.0.0.0 for remote access)",
+)
+def start(port: int, host: str) -> None:
     """Start the broker MCP server."""
     import os
 
     from mcp_server.server import run_server
 
     os.environ.setdefault("AGENTSQUAD_HTTP_PORT", str(port))
-    run_server(port=port)
+    os.environ.setdefault("AGENTSQUAD_HTTP_HOST", host)
+    run_server(port=port, host=host)
 
 
 @cli.command()

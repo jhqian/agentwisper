@@ -20,6 +20,7 @@ def test_start_help():
     result = runner.invoke(cli, ["start", "--help"])
     assert result.exit_code == 0
     assert "--port" in result.output
+    assert "--host" in result.output
 
 
 def test_status_command():
