@@ -188,3 +188,46 @@ async def test_broker_reconnect(broker):
 async def test_broker_reconnect_not_found(broker):
     with pytest.raises(ValueError, match="No disconnected agent"):
         await broker.reconnect_agent("nonexistent", session_name="sess_1")
+
+
+async def test_broker_cleanup_removes_expired_agents(tmp_path):
+    """Verify broker cleanup removes expired disconnected agents."""
+    config = BrokerConfig(db_path=str(tmp_path / "test.db"))
+    b = Broker(config)
+    await b.start()
+
+    result = await b.register_agent("old-agent", ["code"])
+    await b.deregister_agent(result["agent_id"])
+
+    # Manually age the disconnected_at timestamp
+    from datetime import datetime, timezone, timedelta
+    old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    from persistence.database import AsyncDatabase
+    await b._db.execute(
+        "UPDATE agents SET disconnected_at = ? WHERE agent_id = ?",
+        (old_time, result["agent_id"]),
+    )
+
+    removed = await b._run_cleanup(ttl_days=7)
+    assert removed == 1
+    info = await b.get_agent_info(result["agent_id"])
+    assert info is None
+
+    await b.stop()
+
+
+async def test_broker_cleanup_preserves_recent(tmp_path):
+    """Verify broker cleanup keeps recently disconnected agents."""
+    config = BrokerConfig(db_path=str(tmp_path / "test.db"))
+    b = Broker(config)
+    await b.start()
+
+    result = await b.register_agent("recent-agent", ["code"])
+    await b.deregister_agent(result["agent_id"])
+
+    removed = await b._run_cleanup(ttl_days=7)
+    assert removed == 0
+    info = await b.get_agent_info(result["agent_id"])
+    assert info is not None
+
+    await b.stop()

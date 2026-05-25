@@ -286,3 +286,15 @@ class Broker:
             "pending_messages": pending,
             "waiting_agents": len(self._wait_events),
         }
+
+    # ------------------------------------------------------------------
+    # Maintenance operations
+    # ------------------------------------------------------------------
+
+    async def _run_cleanup(self, ttl_days: int | None = None) -> int:
+        """Run one cleanup cycle. Returns count of removed agents."""
+        if ttl_days is None:
+            ttl_days = self._config.disconnected_ttl_days
+        if ttl_days <= 0:
+            return 0
+        return await self._registry.cleanup_expired(ttl_days)

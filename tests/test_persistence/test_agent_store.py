@@ -174,3 +174,60 @@ async def test_find_names_includes_disconnected(store):
     await store.update_status(agent_id, AgentStatus.DISCONNECTED)
     names = await store.find_names_by_prefix("dev")
     assert names == ["dev"]
+
+
+async def test_update_status_sets_disconnected_at(store):
+    agent_id = await store.create(name="test", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    agent = await store.get(agent_id)
+    assert agent["disconnected_at"] is not None
+
+
+async def test_update_status_clears_disconnected_at_on_reconnect(store):
+    agent_id = await store.create(name="test", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    await store.update_status(agent_id, AgentStatus.ACTIVE)
+    agent = await store.get(agent_id)
+    assert agent["disconnected_at"] is None
+
+
+async def test_cleanup_expired_agents_removes_old(store, db):
+    agent_id = await store.create(name="old-agent", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    from datetime import datetime, timezone, timedelta
+    old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    await db.execute(
+        "UPDATE agents SET disconnected_at = ? WHERE agent_id = ?",
+        (old_time, agent_id),
+    )
+    removed = await store.cleanup_expired_agents(ttl_days=7)
+    assert removed == 1
+    assert await store.get(agent_id) is None
+
+
+async def test_cleanup_preserves_recent_disconnected(store):
+    agent_id = await store.create(name="recent-agent", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    removed = await store.cleanup_expired_agents(ttl_days=7)
+    assert removed == 0
+    assert await store.get(agent_id) is not None
+
+
+async def test_cleanup_cascades_to_messages(store, db):
+    from datetime import datetime, timezone, timedelta
+    agent_id = await store.create(name="old-agent", capabilities=["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    await db.execute(
+        "UPDATE agents SET disconnected_at = ? WHERE agent_id = ?",
+        (old_time, agent_id),
+    )
+    await db.execute(
+        "INSERT INTO messages (msg_id, sender_id, recipient_id, msg_type, payload, status, created_at) "
+        "VALUES (?, 'system', ?, 'notification', 'test', 'pending', ?)",
+        ("msg_1", agent_id, old_time),
+    )
+    removed = await store.cleanup_expired_agents(ttl_days=7)
+    assert removed == 1
+    msgs = await db.execute_fetchall("SELECT * FROM messages WHERE recipient_id = ?", (agent_id,))
+    assert len(msgs) == 0

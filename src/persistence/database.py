@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS agents (
     created_at TEXT NOT NULL,
     last_heartbeat TEXT NOT NULL,
     session_name TEXT,
-    metadata TEXT NOT NULL DEFAULT '{}'
+    metadata TEXT NOT NULL DEFAULT '{}',
+    disconnected_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -112,6 +113,10 @@ MIGRATIONS = [
     ALTER TABLE agents ADD COLUMN session_name TEXT;
     DROP INDEX IF EXISTS idx_agents_name;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name) WHERE status != 'disconnected';
+    """,
+    # Migration 2: add disconnected_at column for TTL cleanup
+    """
+    ALTER TABLE agents ADD COLUMN disconnected_at TEXT;
     """,
 ]
 
