@@ -14,6 +14,9 @@ class BrokerConfig:
     message_poll_limit: int = 50
     retention_days: int = 30
     http_port: int = 8000
+    http_host: str = "127.0.0.1"
+    disconnected_ttl_days: int = 7
+    cleanup_interval_minutes: int = 60
 
 
 def load_config() -> BrokerConfig:
@@ -23,4 +26,7 @@ def load_config() -> BrokerConfig:
         message_poll_limit=int(os.environ.get("AGENTSQUAD_POLL_LIMIT", "50")),
         retention_days=int(os.environ.get("AGENTSQUAD_RETENTION_DAYS", "30")),
         http_port=int(os.environ.get("AGENTSQUAD_HTTP_PORT", "8000")),
+        http_host=os.environ.get("AGENTSQUAD_HTTP_HOST", BrokerConfig.http_host),
+        disconnected_ttl_days=int(os.environ.get("AGENTSQUAD_DISCONNECTED_TTL_DAYS", "7")),
+        cleanup_interval_minutes=int(os.environ.get("AGENTSQUAD_CLEANUP_INTERVAL_MINUTES", "60")),
     )

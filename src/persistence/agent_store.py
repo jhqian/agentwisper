@@ -75,11 +75,17 @@ class AgentStore:
         return [row["name"] for row in rows]
 
     async def update_status(self, agent_id: str, status: AgentStatus) -> None:
-        """Update agent status."""
-        await self._db.execute(
-            "UPDATE agents SET status = ? WHERE agent_id = ?",
-            (status, agent_id),
-        )
+        """Update agent status and track disconnection time."""
+        if status == AgentStatus.DISCONNECTED:
+            await self._db.execute(
+                "UPDATE agents SET status = ?, disconnected_at = ? WHERE agent_id = ?",
+                (status, _now_iso(), agent_id),
+            )
+        else:
+            await self._db.execute(
+                "UPDATE agents SET status = ?, disconnected_at = NULL WHERE agent_id = ?",
+                (status, agent_id),
+            )
 
     async def update_session_name(self, agent_id: str, session_name: str | None) -> None:
         """Update agent session_name."""
@@ -114,6 +120,52 @@ class AgentStore:
         await self._db.execute(
             "DELETE FROM agents WHERE agent_id = ?", (agent_id,)
         )
+
+    async def cleanup_expired_agents(self, ttl_days: int) -> int:
+        """Hard-delete disconnected agents older than ttl_days.
+
+        Cascades to memberships, subscriptions, messages, and delivery logs.
+        Returns count of removed agents.
+        """
+        from datetime import datetime, timezone, timedelta
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=ttl_days)).isoformat()
+        expired = await self._db.execute_fetchall(
+            "SELECT agent_id FROM agents WHERE status = ? AND disconnected_at < ?",
+            (AgentStatus.DISCONNECTED, cutoff),
+        )
+        if not expired:
+            return 0
+
+        ids = [row["agent_id"] for row in expired]
+        placeholders = ",".join("?" * len(ids))
+
+        await self._db.execute(
+            f"DELETE FROM squad_memberships WHERE agent_id IN ({placeholders})",
+            tuple(ids),
+        )
+        await self._db.execute(
+            f"DELETE FROM team_memberships WHERE agent_id IN ({placeholders})",
+            tuple(ids),
+        )
+        await self._db.execute(
+            f"DELETE FROM subscriptions WHERE agent_id IN ({placeholders})",
+            tuple(ids),
+        )
+        await self._db.execute(
+            f"DELETE FROM delivery_logs WHERE recipient_id IN ({placeholders})",
+            tuple(ids),
+        )
+        await self._db.execute(
+            f"DELETE FROM messages WHERE sender_id IN ({placeholders}) "
+            f"OR recipient_id IN ({placeholders})",
+            tuple(ids) + tuple(ids),
+        )
+        await self._db.execute(
+            f"DELETE FROM agents WHERE agent_id IN ({placeholders})",
+            tuple(ids),
+        )
+        return len(ids)
 
     async def list_all(self) -> list[dict[str, Any]]:
         """List all agents ordered by creation time."""

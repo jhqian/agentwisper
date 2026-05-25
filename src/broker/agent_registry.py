@@ -142,3 +142,7 @@ class AgentRegistry:
         if squad_id:
             return await self._agent_store.list_by_squad(squad_id)
         return await self._agent_store.list_all()
+
+    async def cleanup_expired(self, ttl_days: int) -> int:
+        """Delegate to AgentStore cleanup."""
+        return await self._agent_store.cleanup_expired_agents(ttl_days)

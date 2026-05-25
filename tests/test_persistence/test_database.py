@@ -68,3 +68,9 @@ async def test_unique_name_constraint(db):
 async def test_migration_version(db):
     version = await db.execute_fetchone("PRAGMA user_version")
     assert version["user_version"] == len(MIGRATIONS)
+
+
+async def test_agents_table_has_disconnected_at_column(db):
+    columns = await db.execute_fetchall("PRAGMA table_info(agents)")
+    column_names = [c["name"] for c in columns]
+    assert "disconnected_at" in column_names
