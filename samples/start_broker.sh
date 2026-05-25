@@ -3,13 +3,27 @@
 # Licensed under the Apache License, Version 2.0
 
 # Start the agentsquad broker.
-# Usage: ./start_broker.sh
+# Usage: ./start_broker.sh [--host <addr>] [--port <port>]
+#   --host  Host address to bind (default: 127.0.0.1; use 0.0.0.0 for remote access)
+#   --port  HTTP port (default: 8000)
 # Press Ctrl+C to stop.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Parse arguments
+BROKER_HOST="127.0.0.1"
+BROKER_PORT="8000"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --host) BROKER_HOST="$2"; shift 2 ;;
+        --port) BROKER_PORT="$2"; shift 2 ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
 
 # Check dependencies
 if ! command -v uv &>/dev/null; then
@@ -22,8 +36,8 @@ if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
     exit 1
 fi
 
-echo "Starting agentsquad broker on port 8000 ..."
-echo "Broker URL: http://localhost:8000/mcp"
+echo "Starting agentsquad broker on ${BROKER_HOST}:${BROKER_PORT} ..."
+echo "Broker URL: http://${BROKER_HOST}:${BROKER_PORT}/mcp"
 echo "Press Ctrl+C to stop."
 echo ""
 echo "To connect agents, install the agentsquad plugin and run Claude Code:"
@@ -58,4 +72,4 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$PROJECT_ROOT"
-uv run agentsquad-broker start --port 8000
+uv run agentsquad-broker start --port "$BROKER_PORT" --host "$BROKER_HOST"

@@ -260,6 +260,26 @@ async def test_message_query_tool(mock_context):
     assert result["total"] == 2
 
 
+async def test_message_get_tool(mock_context):
+    from mcp_server.server import agent_register, message_send, message_get
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("recver", [], ctx=mock_context)
+
+    sent = await message_send(
+        r1["agent_id"], r2["agent_id"], "hello", ctx=mock_context
+    )
+    msg_id = sent["msg_id"]
+
+    result = await message_get(msg_id, ctx=mock_context)
+    assert result["message"] is not None
+    assert result["message"]["msg_id"] == msg_id
+    assert result["message"]["payload"] == "hello"
+
+    not_found = await message_get("msg_nonexistent", ctx=mock_context)
+    assert not_found["message"] is None
+
+
 # ---------------------------------------------------------------------------
 # Subscription
 # ---------------------------------------------------------------------------
@@ -355,3 +375,15 @@ def test_mcp_instance_has_tools():
     # functions are importable and the mcp object exists.
     assert mcp is not None
     assert mcp.name == "agentsquad-broker"
+
+
+def test_run_server_sets_host_and_port():
+    from unittest.mock import patch
+
+    from mcp_server.server import run_server
+
+    with patch("mcp_server.server.mcp") as mock_mcp:
+        run_server(port=9000, host="0.0.0.0")
+        assert mock_mcp.settings.port == 9000
+        assert mock_mcp.settings.host == "0.0.0.0"
+        mock_mcp.run.assert_called_once_with(transport="streamable-http")

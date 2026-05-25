@@ -412,6 +412,20 @@ async def message_query(
     return {"messages": messages, "total": len(messages)}
 
 
+@mcp.tool()
+async def message_get(
+    msg_id: str,
+    ctx: Context | None = None,
+) -> dict:
+    """Retrieve a single message by its msg_id. Returns the full message record or None if not found."""
+    from persistence.message_store import MessageStore
+
+    broker = _get_broker(ctx)
+    store = MessageStore(broker._db)
+    message = await store.get(msg_id)
+    return {"message": message}
+
+
 # ---------------------------------------------------------------------------
 # Subscription
 # ---------------------------------------------------------------------------
@@ -459,7 +473,8 @@ def create_server() -> FastMCP:
     return mcp
 
 
-def run_server(port: int = 8000) -> None:
+def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     """Run the MCP server with streamable-http transport."""
     mcp.settings.port = port
+    mcp.settings.host = host
     mcp.run(transport="streamable-http")
