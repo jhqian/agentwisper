@@ -109,6 +109,35 @@ async def test_query_messages(store, agents):
     assert len(results) == 2
 
 
+async def test_create_with_client_provided_msg_id(store, agents):
+    sender, receiver = agents
+    client_msg_id = "msg_clientgenerated123"
+    msg_id = await store.create(
+        sender_id=sender,
+        recipient_id=receiver,
+        msg_type=MessageType.P2P,
+        payload="hello",
+        msg_id=client_msg_id,
+    )
+    assert msg_id == client_msg_id
+    retrieved = await store.get(client_msg_id)
+    assert retrieved is not None
+    assert retrieved["msg_id"] == client_msg_id
+    assert retrieved["payload"] == "hello"
+
+
+async def test_create_auto_generates_msg_id_when_not_provided(store, agents):
+    sender, receiver = agents
+    msg_id = await store.create(
+        sender_id=sender,
+        recipient_id=receiver,
+        msg_type=MessageType.P2P,
+        payload="auto",
+    )
+    assert msg_id.startswith("msg_")
+    assert len(msg_id) > 4  # not just "msg_"
+
+
 async def test_query_by_time_range(store, agents):
     sender, receiver = agents
     await store.create(sender_id=sender, recipient_id=receiver,
