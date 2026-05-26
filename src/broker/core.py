@@ -230,9 +230,11 @@ class Broker:
         payload: str,
         msg_type: str = "p2p",
         squad_id: str | None = None,
+        msg_id: str | None = None,
     ) -> dict:
         result = await self._router.send_message(
-            sender_id, recipient, payload, MessageType(msg_type), squad_id
+            sender_id, recipient, payload, MessageType(msg_type), squad_id,
+            msg_id=msg_id,
         )
         recipient_id = result.get("recipient_id", recipient)
         await self._notify_recipients([recipient_id])
@@ -244,9 +246,10 @@ class Broker:
         topic: str,
         payload: str,
         squad_id: str | None = None,
+        msg_id: str | None = None,
     ) -> dict:
         result = await self._router.broadcast_message(
-            sender_id, topic, payload, squad_id
+            sender_id, topic, payload, squad_id, msg_id=msg_id,
         )
         subscriber_ids = result.get("subscriber_ids", [])
         if subscriber_ids:

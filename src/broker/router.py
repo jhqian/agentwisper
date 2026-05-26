@@ -70,6 +70,7 @@ class MessageRouter:
         payload: str,
         msg_type: MessageType,
         squad_id: str | None = None,
+        msg_id: str | None = None,
     ) -> dict[str, Any]:
         """Send a P2P or RPC request message.
 
@@ -82,6 +83,7 @@ class MessageRouter:
             payload: Message payload as string.
             msg_type: One of P2P or RPC_REQUEST.
             squad_id: Optional squad context for permission checks.
+            msg_id: Optional client-provided msg_id. Auto-generated if None.
 
         Returns:
             Dict with msg_id and status.
@@ -98,6 +100,7 @@ class MessageRouter:
             msg_type=msg_type,
             payload=payload,
             squad_id=squad_id,
+            msg_id=msg_id,
         )
         return {"msg_id": msg_id, "status": "pending", "recipient_id": recipient_id}
 
@@ -107,6 +110,7 @@ class MessageRouter:
         topic: str,
         payload: str,
         squad_id: str | None = None,
+        msg_id: str | None = None,
     ) -> dict[str, Any]:
         """Broadcast a Pub/Sub message to all subscribers of a topic.
 
@@ -118,6 +122,7 @@ class MessageRouter:
             topic: Topic string to broadcast to.
             payload: Message payload as string.
             squad_id: Optional squad context for scoping and permissions.
+            msg_id: Optional client-provided msg_id. Auto-generated if None.
 
         Returns:
             Dict with msg_id and subscriber_count.
@@ -134,6 +139,7 @@ class MessageRouter:
             payload=payload,
             topic=topic,
             squad_id=squad_id,
+            msg_id=msg_id,
         )
 
         # Get squad-scoped subscribers, then add global subscribers

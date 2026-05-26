@@ -41,9 +41,14 @@ class MessageStore:
         squad_id: str | None = None,
         parent_msg_id: str | None = None,
         expires_at: str | None = None,
+        msg_id: str | None = None,
     ) -> str:
-        """Create a new message record. Returns the generated msg_id."""
-        msg_id = _generate_msg_id()
+        """Create a new message record. Returns the msg_id.
+
+        If msg_id is provided, use it. Otherwise generate one.
+        """
+        if msg_id is None:
+            msg_id = _generate_msg_id()
         await self._db.execute(
             "INSERT INTO messages "
             "(msg_id, sender_id, recipient_id, topic, msg_type, squad_id, payload, "
