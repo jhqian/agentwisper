@@ -387,3 +387,43 @@ def test_run_server_sets_host_and_port():
         assert mock_mcp.settings.port == 9000
         assert mock_mcp.settings.host == "0.0.0.0"
         mock_mcp.run.assert_called_once_with(transport="streamable-http")
+
+
+async def test_message_send_with_client_msg_id(mock_context):
+    from mcp_server.server import agent_register, message_send, message_get
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("recver", [], ctx=mock_context)
+
+    result = await message_send(
+        r1["agent_id"], r2["agent_id"], "hello",
+        msg_id="msg_clienttest123", ctx=mock_context,
+    )
+    assert result["msg_id"] == "msg_clienttest123"
+
+    retrieved = await message_get("msg_clienttest123", ctx=mock_context)
+    assert retrieved["message"] is not None
+    assert retrieved["message"]["payload"] == "hello"
+
+
+async def test_message_broadcast_with_client_msg_id(mock_context):
+    from mcp_server.server import (
+        agent_register,
+        topic_subscribe,
+        message_broadcast,
+        message_poll,
+    )
+
+    a1 = await agent_register("pub", [], ctx=mock_context)
+    a2 = await agent_register("sub", [], ctx=mock_context)
+
+    await topic_subscribe(a2["agent_id"], "events", ctx=mock_context)
+    result = await message_broadcast(
+        a1["agent_id"], "events", '{"event": "test"}',
+        msg_id="msg_bcast_client456", ctx=mock_context,
+    )
+    assert result["msg_id"] == "msg_bcast_client456"
+    assert result["subscriber_count"] == 1
+
+    polled = await message_poll(a2["agent_id"], ctx=mock_context)
+    assert polled["total"] >= 1

@@ -300,12 +300,13 @@ async def message_send(
     payload: str,
     msg_type: str = "p2p",
     squad_id: str | None = None,
+    msg_id: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Send a P2P or RPC message. sender_id and recipient accept agent_id or name."""
     broker = _get_broker(ctx)
     sender_id = await _resolve_agent(broker, sender_id)
-    return await broker.send_message(sender_id, recipient, payload, msg_type, squad_id)
+    return await broker.send_message(sender_id, recipient, payload, msg_type, squad_id, msg_id=msg_id)
 
 
 @mcp.tool()
@@ -314,12 +315,13 @@ async def message_broadcast(
     topic: str,
     payload: str,
     squad_id: str | None = None,
+    msg_id: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Publish to topic subscribers. sender_id accepts agent_id or name."""
     broker = _get_broker(ctx)
     sender_id = await _resolve_agent(broker, sender_id)
-    return await broker.broadcast_message(sender_id, topic, payload, squad_id)
+    return await broker.broadcast_message(sender_id, topic, payload, squad_id, msg_id=msg_id)
 
 
 
