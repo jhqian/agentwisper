@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import anyio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from broker.agent_registry import AgentRegistry
@@ -49,6 +50,7 @@ class Broker:
         if self._started:
             return
         await self._db.initialize()
+        await self._reset_active_agents_on_startup()
         self._started = True
 
     async def stop(self) -> None:
@@ -57,6 +59,29 @@ class Broker:
             return
         await self._db.close()
         self._started = False
+
+    async def _reset_active_agents_on_startup(self) -> None:
+        """Mark all active/paused agents as disconnected after broker restart.
+
+        MCP connections are lost when the broker process exits. All agents
+        must reconnect to resume operations. Already-disconnected agents
+        are left unchanged.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        affected = await self._db.execute_fetchall(
+            "SELECT agent_id FROM agents WHERE status IN ('active', 'paused')"
+        )
+        if not affected:
+            return
+        await self._db.execute(
+            "UPDATE agents SET status = 'disconnected', "
+            "disconnected_at = ?, session_name = NULL "
+            "WHERE status IN ('active', 'paused')",
+            (now,),
+        )
+        logger.info(
+            "Broker startup: reset %d agent(s) to disconnected", len(affected)
+        )
 
     # ------------------------------------------------------------------
     # Notification dispatch
