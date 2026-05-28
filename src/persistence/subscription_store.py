@@ -51,15 +51,19 @@ class SubscriptionStore:
     async def get_subscribers(
         self, topic: str, squad_id: str | None = None
     ) -> list[str]:
-        """Get agent_ids subscribed to a topic. Optionally filter by squad_id."""
+        """Get agent_ids subscribed to a topic, excluding disconnected agents."""
         if squad_id is not None:
             rows = await self._db.execute_fetchall(
-                "SELECT agent_id FROM subscriptions WHERE topic = ? AND squad_id = ?",
+                "SELECT s.agent_id FROM subscriptions s "
+                "JOIN agents a ON s.agent_id = a.agent_id "
+                "WHERE s.topic = ? AND s.squad_id = ? AND a.status != 'disconnected'",
                 (topic, squad_id),
             )
         else:
             rows = await self._db.execute_fetchall(
-                "SELECT agent_id FROM subscriptions WHERE topic = ?",
+                "SELECT s.agent_id FROM subscriptions s "
+                "JOIN agents a ON s.agent_id = a.agent_id "
+                "WHERE s.topic = ? AND a.status != 'disconnected'",
                 (topic,),
             )
         return [row["agent_id"] for row in rows]
