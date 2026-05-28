@@ -104,7 +104,7 @@ async def test_agent_reconnect_tool(mock_context):
 async def test_agent_reconnect_not_found(mock_context):
     from mcp_server.server import agent_reconnect
 
-    with pytest.raises(ValueError, match="No disconnected agent"):
+    with pytest.raises(ValueError, match="never been registered or may have expired"):
         await agent_reconnect("nonexistent", session_name="sess_1", ctx=mock_context)
 
 

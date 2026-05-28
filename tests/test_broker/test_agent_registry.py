@@ -219,13 +219,13 @@ async def test_reconnect_restores_disconnected_agent(registry):
 
 
 async def test_reconnect_nonexistent_raises(registry):
-    with pytest.raises(ValueError, match="No disconnected agent"):
+    with pytest.raises(ValueError, match="never been registered or may have expired"):
         await registry.reconnect(name="nonexistent", session_name="sess_1")
 
 
 async def test_reconnect_active_agent_raises(registry):
     await registry.register(name="dev", capabilities=[])
-    with pytest.raises(ValueError, match="No disconnected agent"):
+    with pytest.raises(ValueError, match="status 'active'"):
         await registry.reconnect(name="dev", session_name="sess_1")
 
 
@@ -237,6 +237,24 @@ async def test_reconnect_preserves_capabilities(registry):
     assert result["agent_id"] == agent_id
     info = await registry.get_info(agent_id)
     assert info["capabilities"] == '["code", "review"]'
+
+
+async def test_reconnect_active_agent_error_mentions_status(registry):
+    await registry.register(name="dev", capabilities=[])
+    with pytest.raises(ValueError, match="status 'active'"):
+        await registry.reconnect(name="dev")
+
+
+async def test_reconnect_paused_agent_error_mentions_status(registry):
+    r = await registry.register(name="dev", capabilities=[])
+    await registry.pause(r["agent_id"])
+    with pytest.raises(ValueError, match="status 'paused'"):
+        await registry.reconnect(name="dev")
+
+
+async def test_reconnect_never_registered_error_suggests_cause(registry):
+    with pytest.raises(ValueError, match="never been registered or may have expired"):
+        await registry.reconnect(name="ghost")
 
 
 async def test_reconnect_preserves_squad(registry, db):
