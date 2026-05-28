@@ -68,7 +68,16 @@ class AgentRegistry:
         """
         agent = await self._agent_store.get_disconnected_by_name(name)
         if agent is None:
-            raise ValueError(f"No disconnected agent with name '{name}' found")
+            existing = await self._agent_store.get_by_name(name)
+            if existing is not None:
+                raise ValueError(
+                    f"Agent '{name}' exists with status '{existing['status']}', "
+                    f"not 'disconnected'. Only disconnected agents can reconnect."
+                )
+            raise ValueError(
+                f"No agent named '{name}' found. It may have never been registered "
+                f"or may have expired after the retention period."
+            )
         agent_id = agent["agent_id"]
         await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
         if session_name:

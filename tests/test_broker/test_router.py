@@ -147,6 +147,42 @@ async def test_poll_auto_acknowledges_direct_message(router, agent_store):
     assert len(msgs) == 0
 
 
+async def test_send_to_disconnected_agent_raises(router, agent_store):
+    sender = await agent_store.create(name="sender", capabilities=[])
+    receiver = await agent_store.create(name="receiver", capabilities=[])
+    from common.types import AgentStatus
+    await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
+    with pytest.raises(ValueError, match="disconnected"):
+        await router.send_message(
+            sender_id=sender, recipient=receiver,
+            payload='{}', msg_type=MessageType.P2P
+        )
+
+
+async def test_send_to_disconnected_by_name_raises(router, agent_store):
+    sender = await agent_store.create(name="sender", capabilities=[])
+    receiver = await agent_store.create(name="alice", capabilities=[])
+    from common.types import AgentStatus
+    await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
+    with pytest.raises(ValueError, match="disconnected"):
+        await router.send_message(
+            sender_id=sender, recipient="alice",
+            payload='{}', msg_type=MessageType.P2P
+        )
+
+
+async def test_rpc_to_disconnected_agent_raises(router, agent_store):
+    caller = await agent_store.create(name="caller", capabilities=[])
+    worker = await agent_store.create(name="worker", capabilities=[])
+    from common.types import AgentStatus
+    await agent_store.update_status(worker, AgentStatus.DISCONNECTED)
+    with pytest.raises(ValueError, match="disconnected"):
+        await router.send_message(
+            sender_id=caller, recipient=worker,
+            payload='{"task": "build"}', msg_type=MessageType.RPC_REQUEST
+        )
+
+
 async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
     sender = await agent_store.create(name="publisher", capabilities=[])
     subscriber = await agent_store.create(name="sub", capabilities=[])
@@ -161,3 +197,20 @@ async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
             "SELECT * FROM delivery_logs WHERE delivery_id = ?", (delivery_id,)
         )
         assert dlv["status"] == "acknowledged"
+
+
+async def test_pubsub_broadcast_skips_disconnected_subscriber(router, agent_store, sub_store):
+    from common.types import AgentStatus
+    sender = await agent_store.create(name="publisher", capabilities=[])
+    sub1 = await agent_store.create(name="sub1", capabilities=[])
+    sub2 = await agent_store.create(name="sub2", capabilities=[])
+    await sub_store.create(agent_id=sub1, topic="alerts")
+    await sub_store.create(agent_id=sub2, topic="alerts")
+    await agent_store.update_status(sub2, AgentStatus.DISCONNECTED)
+
+    result = await router.broadcast_message(
+        sender_id=sender, topic="alerts", payload='{"level": "high"}'
+    )
+    assert result["subscriber_count"] == 1
+    assert sub1 in result["subscriber_ids"]
+    assert sub2 not in result["subscriber_ids"]
