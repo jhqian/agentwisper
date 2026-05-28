@@ -186,7 +186,7 @@ async def test_broker_reconnect(broker):
 
 
 async def test_broker_reconnect_not_found(broker):
-    with pytest.raises(ValueError, match="No disconnected agent"):
+    with pytest.raises(ValueError, match="never been registered or may have expired"):
         await broker.reconnect_agent("nonexistent", session_name="sess_1")
 
 
@@ -231,3 +231,111 @@ async def test_broker_cleanup_preserves_recent(tmp_path):
     assert info is not None
 
     await b.stop()
+
+
+# ---------------------------------------------------------------------------
+# Broker restart tests
+# ---------------------------------------------------------------------------
+
+
+async def test_broker_start_resets_active_agents(tmp_path):
+    """Broker restart marks all active/paused agents as disconnected."""
+    db_path = str(tmp_path / "test.db")
+    config = BrokerConfig(db_path=db_path)
+
+    # First broker session: register agents
+    b1 = Broker(config)
+    await b1.start()
+    r1 = await b1.register_agent("alice", ["code"], session_name="sess_1")
+    r2 = await b1.register_agent("bob", ["review"], session_name="sess_2")
+    await b1.pause_agent(r2["agent_id"])
+    await b1.stop()
+
+    # Second broker session (simulates restart): agents should be disconnected
+    b2 = Broker(config)
+    await b2.start()
+    info1 = await b2.get_agent_info(r1["agent_id"])
+    assert info1["status"] == "disconnected"
+    assert info1["session_name"] is None
+    info2 = await b2.get_agent_info(r2["agent_id"])
+    assert info2["status"] == "disconnected"
+    assert info2["session_name"] is None
+    await b2.stop()
+
+
+async def test_broker_start_already_disconnected_unchanged(tmp_path):
+    """Already disconnected agents are not affected by broker restart."""
+    db_path = str(tmp_path / "test.db")
+    config = BrokerConfig(db_path=db_path)
+
+    b1 = Broker(config)
+    await b1.start()
+    r = await b1.register_agent("ghost", ["code"])
+    await b1.deregister_agent(r["agent_id"])
+    original_info = await b1.get_agent_info(r["agent_id"])
+    await b1.stop()
+
+    b2 = Broker(config)
+    await b2.start()
+    info = await b2.get_agent_info(r["agent_id"])
+    assert info["status"] == "disconnected"
+    assert info["disconnected_at"] == original_info["disconnected_at"]
+    await b2.stop()
+
+
+async def test_broker_reconnect_after_restart(tmp_path):
+    """Agent can reconnect after broker restart to resume operations."""
+    db_path = str(tmp_path / "test.db")
+    config = BrokerConfig(db_path=db_path)
+
+    # First session: register and subscribe
+    b1 = Broker(config)
+    await b1.start()
+    r = await b1.register_agent("dev", ["code"], session_name="sess_old")
+    await b1.subscribe_topic(r["agent_id"], "alerts")
+    await b1.stop()
+
+    # Second session: reconnect
+    b2 = Broker(config)
+    await b2.start()
+    result = await b2.reconnect_agent("dev", session_name="sess_new")
+    assert result["status"] == "active"
+    assert result["agent_id"] == r["agent_id"]
+    info = await b2.get_agent_info(r["agent_id"])
+    assert info["session_name"] == "sess_new"
+    # Subscription preserved
+    subs = await b2._sub_store.list_by_agent(r["agent_id"])
+    assert len(subs) == 1
+    await b2.stop()
+
+
+async def test_broker_start_empty_db_no_error(tmp_path):
+    """Broker start with empty database does not fail on agent reset."""
+    config = BrokerConfig(db_path=str(tmp_path / "fresh.db"))
+    b = Broker(config)
+    await b.start()
+    status = await b.broker_status()
+    assert status["active_agents"] == 0
+    await b.stop()
+
+
+async def test_broker_start_idempotent(tmp_path):
+    """Calling start() twice does not reset agents again."""
+    db_path = str(tmp_path / "test.db")
+    config = BrokerConfig(db_path=db_path)
+
+    b1 = Broker(config)
+    await b1.start()
+    r = await b1.register_agent("alice", ["code"])
+    await b1.stop()
+
+    b2 = Broker(config)
+    await b2.start()
+    # Agent now disconnected (first start)
+    info = await b2.get_agent_info(r["agent_id"])
+    assert info["status"] == "disconnected"
+    # Second start call is no-op due to _started flag
+    await b2.start()
+    info2 = await b2.get_agent_info(r["agent_id"])
+    assert info2["status"] == "disconnected"
+    await b2.stop()
