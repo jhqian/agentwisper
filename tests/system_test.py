@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sqlite3
 import subprocess
 import sys
 import time
@@ -63,8 +62,7 @@ async def call_tool(session: ClientSession, name: str, args: dict) -> dict:
 async def check_agent_state_transitions(
     session: ClientSession,
 ) -> tuple[str, str, str]:
-    """Register 3 agents, pause/resume with buffered_count verification,
-    disconnect/reconnect."""
+    """Register 3 agents, deregister/reconnect, verify name release."""
     a_result = await call_tool(
         session,
         "agent_register",
@@ -90,42 +88,36 @@ async def check_agent_state_transitions(
     b = b_result["agent_id"]
     c = c_result["agent_id"]
 
-    # Pause agent a
-    pause_res = await call_tool(session, "agent_pause", {"agent_id": a})
+    # Deregister c, verify disconnected status
+    dereg_res = await call_tool(session, "agent_deregister", {"agent_id": c})
     report(
-        "state: pause alpha",
-        pause_res.get("status") == "paused",
-        str(pause_res),
+        "state: deregister gamma",
+        dereg_res.get("status") == "disconnected",
+        str(dereg_res),
     )
 
-    # Resume agent a -- no messages sent yet, buffered_count should be 0
-    resume_res = await call_tool(session, "agent_resume", {"agent_id": a})
+    # Verify c is disconnected
+    info_c = await call_tool(session, "agent_info", {"agent_id": c})
     report(
-        "state: resume alpha (0 buffered)",
-        resume_res.get("status") == "active"
-        and resume_res.get("buffered_count", -1) == 0,
-        str(resume_res),
+        "state: gamma is disconnected",
+        info_c is not None and info_c.get("status") == "disconnected",
+        str(info_c.get("status") if info_c else None),
     )
 
-    # Disconnect via direct DB update, then reconnect
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("UPDATE agents SET status = 'disconnected' WHERE agent_id = ?", (c,))
-    conn.commit()
-    conn.close()
-
-    # Reconnect c
-    reconnect_res = await call_tool(session, "agent_resume", {"agent_id": c})
-    # c is disconnected, not paused, so resume should fail
+    # Reconnect c by name
+    reconnect_res = await call_tool(
+        session, "agent_reconnect", {"name": "sys-gamma", "session_name": "sess_new"},
+    )
     report(
-        "state: resume disconnected gamma fails",
-        "error" in reconnect_res or "status" not in reconnect_res,
+        "state: reconnect gamma",
+        reconnect_res.get("status") == "active" and reconnect_res.get("agent_id") == c,
         str(reconnect_res),
     )
 
     # Verify alpha info shows active
     info_a = await call_tool(session, "agent_info", {"agent_id": a})
     report(
-        "state: alpha is active after resume",
+        "state: alpha is active",
         info_a is not None and info_a.get("status") == "active",
         str(info_a.get("status")),
     )
@@ -134,52 +126,7 @@ async def check_agent_state_transitions(
 
 
 # ---------------------------------------------------------------------------
-# 2. Message buffering on pause (5 checks)
-# ---------------------------------------------------------------------------
-
-
-async def check_message_buffering_on_pause(
-    session: ClientSession, a: str, b: str
-) -> None:
-    """Pause agent, send 3 messages, verify poll returns 0, resume,
-    verify buffered_count >= 3."""
-    await call_tool(session, "agent_pause", {"agent_id": b})
-
-    for i in range(3):
-        sent = await call_tool(
-            session,
-            "message_send",
-            {"sender_id": a, "recipient": b, "payload": f"buffered-{i}"},
-        )
-        report(
-            f"buffer: send msg {i} to paused beta",
-            "msg_id" in sent,
-            str(sent),
-        )
-
-    # Poll while paused -- messages are delivered via poll regardless of pause state
-    polled = await call_tool(
-        session, "message_poll", {"agent_id": b, "unread_only": True}
-    )
-    msgs_while_paused = polled.get("messages", [])
-    report(
-        "buffer: poll while paused returns 3",
-        len(msgs_while_paused) == 3,
-        f"got {len(msgs_while_paused)} messages",
-    )
-
-    # Resume -- buffered_count reflects messages not yet polled
-    resume_res = await call_tool(session, "agent_resume", {"agent_id": b})
-    report(
-        "buffer: resume returns active",
-        resume_res.get("status") == "active",
-        str(resume_res.get("status")),
-    )
-
-
-# ---------------------------------------------------------------------------
-# 3. Squad lifecycle (4 checks)
-# ---------------------------------------------------------------------------
+# 2. Squad lifecycle (4 checks)
 # ---------------------------------------------------------------------------
 
 
@@ -445,52 +392,7 @@ async def check_squad_messaging(
 
 
 # ---------------------------------------------------------------------------
-# 8. Agent pause in squad (3 checks)
-# ---------------------------------------------------------------------------
-
-
-async def check_agent_pause_in_squad(
-    session: ClientSession, a: str, b: str
-) -> None:
-    """Pause b while in squad, send direct P2P message + broadcast, resume,
-    verify buffered_count >= 1 for direct message."""
-    await call_tool(session, "agent_pause", {"agent_id": b})
-
-    # Send direct message to paused b
-    sent = await call_tool(
-        session,
-        "message_send",
-        {"sender_id": a, "recipient": b, "payload": "pause-squad-direct"},
-    )
-    report(
-        "pause in squad: direct send while paused",
-        "msg_id" in sent,
-        str(sent),
-    )
-
-    # Resume and check buffered
-    resume_res = await call_tool(session, "agent_resume", {"agent_id": b})
-    buffered = resume_res.get("buffered_count", 0)
-    report(
-        "pause in squad: resume buffered_count >= 1",
-        buffered >= 1,
-        f"buffered_count={buffered}",
-    )
-
-    # Poll to confirm messages arrive
-    polled = await call_tool(
-        session, "message_poll", {"agent_id": b, "unread_only": True}
-    )
-    msgs = polled.get("messages", [])
-    report(
-        "pause in squad: poll after resume has messages",
-        len(msgs) >= 1,
-        f"got {len(msgs)} messages",
-    )
-
-
-# ---------------------------------------------------------------------------
-# 9. Squad dissolve (2 checks)
+# 8. Squad dissolve (2 checks)
 # ---------------------------------------------------------------------------
 
 
@@ -966,15 +868,14 @@ async def check_concurrent_squad_plus_team(
 
 
 # ---------------------------------------------------------------------------
-# 17. Push notification & agent_wake (4 checks)
+# 17. Push notification & message_wait (2 checks)
 # ---------------------------------------------------------------------------
 
 
 async def check_push_and_wake(
     session: ClientSession, a: str, b: str
 ) -> None:
-    """Verify message_wait returns immediately when messages pending.
-    Verify agent_wake resumes paused agent and queues notification message."""
+    """Verify message_wait returns immediately when messages pending."""
     # Ensure clean state: leave any squad/team
     info_b = await call_tool(session, "agent_info", {"agent_id": b})
     if info_b and info_b.get("squad_id"):
@@ -1011,41 +912,6 @@ async def check_push_and_wake(
         f"got {len(msgs)} messages, waited={wait_result.get('waited')}",
     )
 
-    # Pause agent b, then wake it
-    paused = await call_tool(session, "agent_pause", {"agent_id": b})
-    report(
-        "push+wake: pause agent b",
-        paused.get("status") == "paused",
-        str(paused),
-    )
-
-    woken = await call_tool(
-        session,
-        "agent_wake",
-        {"agent_id": b, "message": "system-wake-notification"},
-    )
-    report(
-        "push+wake: agent_wake resumes and queues message",
-        woken.get("status") == "active" and woken.get("message_queued") is True,
-        str(woken),
-    )
-
-    # Poll b to verify wake message arrived
-    polled = await call_tool(
-        session,
-        "message_poll",
-        {"agent_id": b, "unread_only": True},
-    )
-    wake_msgs = [
-        m for m in polled.get("messages", [])
-        if m.get("payload") == "system-wake-notification"
-    ]
-    report(
-        "push+wake: wake notification message received",
-        len(wake_msgs) >= 1,
-        f"got {len(wake_msgs)} wake messages",
-    )
-
 
 # ---------------------------------------------------------------------------
 # Main runner
@@ -1067,7 +933,7 @@ async def run_tests() -> None:
         [
             sys.executable,
             "-c",
-            "from mcp_server.server import run_server; run_server('streamable-http', 8198)",
+            "from mcp_server.server import run_server; run_server(8198)",
         ],
         cwd=project_root,
         env=env,
@@ -1089,12 +955,8 @@ async def run_tests() -> None:
                 print("--- 1. Agent State Transitions ---")
                 a, b, c = await check_agent_state_transitions(session)
 
-                # --- 2. Message buffering on pause ---
-                print("\n--- 2. Message Buffering on Pause ---")
-                await check_message_buffering_on_pause(session, a, b)
-
-                # --- 3. Squad lifecycle ---
-                print("\n--- 3. Squad Lifecycle ---")
+                # --- 2. Squad lifecycle ---
+                print("\n--- 2. Squad Lifecycle ---")
                 squad_id = await check_squad_lifecycle(session, a, b, c)
 
                 # --- 4. Squad role changes ---
@@ -1109,12 +971,8 @@ async def run_tests() -> None:
                 print("\n--- 6. Squad Messaging ---")
                 await check_squad_messaging(session, a, b, c, squad_id)
 
-                # --- 7. Agent pause in squad ---
-                print("\n--- 7. Agent Pause in Squad ---")
-                await check_agent_pause_in_squad(session, a, b)
-
-                # --- 8. Squad dissolve ---
-                print("\n--- 8. Squad Dissolve ---")
+                # --- 7. Squad dissolve ---
+                print("\n--- 7. Squad Dissolve ---")
                 await check_squad_dissolve(session, a, b, c, squad_id)
 
                 # --- 9. Ad-hoc team lifecycle ---
@@ -1145,8 +1003,8 @@ async def run_tests() -> None:
                 print("\n--- 15. Concurrent Squad + Team ---")
                 await check_concurrent_squad_plus_team(session, a, b)
 
-                # --- 16. Push notification and agent_wake ---
-                print("\n--- 16. Push Notification & Agent Wake ---")
+                # --- 14. Push notification and message_wait ---
+                print("\n--- 14. Push Notification & Message Wait ---")
                 await check_push_and_wake(session, a, b)
 
                 # --- Cleanup: deregister all agents ---

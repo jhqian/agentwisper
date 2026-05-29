@@ -230,16 +230,25 @@ async def check_new_tools(session: ClientSession, a: str, b: str) -> None:
     )
     report("message_wait (no-wait)", "waited" in wait_result, str(wait_result))
 
-    # agent_wake: pause then wake
-    paused = await call_tool(session, "agent_pause", {"agent_id": b})
-    report("agent pause for wake test", paused.get("status") == "paused", str(paused))
-
-    woken = await call_tool(
+    # Send a message then verify message_wait returns it
+    sent = await call_tool(
         session,
-        "agent_wake",
-        {"agent_id": b, "message": "wake-up"},
+        "message_send",
+        {"sender_id": a, "recipient": b, "payload": "wait-trigger"},
     )
-    report("agent_wake", woken.get("status") == "active" and woken.get("message_queued") is True, str(woken))
+    report("send for wait test", "msg_id" in sent, str(sent))
+
+    wait_result2 = await call_tool(
+        session,
+        "message_wait",
+        {"agent_id": b, "timeout": 0},
+    )
+    msgs = wait_result2.get("messages", [])
+    report(
+        "message_wait returns pending",
+        len(msgs) >= 1,
+        f"got {len(msgs)} messages, waited={wait_result2.get('waited')}",
+    )
 
 
 async def run_tests() -> None:
@@ -257,7 +266,7 @@ async def run_tests() -> None:
         [
             sys.executable,
             "-c",
-            "from mcp_server.server import run_server; run_server('streamable-http', 8199)",
+            "from mcp_server.server import run_server; run_server(8199)",
         ],
         cwd=project_root,
         env=env,
@@ -294,7 +303,7 @@ async def run_tests() -> None:
                 await check_status(session)
                 await check_info_list(session, a)
 
-                print("--- New Tools (wait, wake) ---")
+                print("--- New Tools (wait) ---")
                 await check_new_tools(session, a, b)
 
                 print("--- Cleanup ---")
