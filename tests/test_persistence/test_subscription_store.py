@@ -83,13 +83,3 @@ async def test_get_subscribers_squad_scoped_excludes_disconnected(store, agent_s
     subscribers = await store.get_subscribers("deploy", squad_id="squad_x")
     assert len(subscribers) == 1
     assert a1 in subscribers
-
-
-async def test_get_subscribers_includes_paused(store, agent_store):
-    from common.types import AgentStatus
-    a1 = await agent_store.create(name="sub1", capabilities=[])
-    await store.create(agent_id=a1, topic="deploy")
-    await agent_store.update_status(a1, AgentStatus.PAUSED)
-    subscribers = await store.get_subscribers("deploy")
-    assert len(subscribers) == 1
-    assert a1 in subscribers

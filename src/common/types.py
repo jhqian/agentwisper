@@ -7,7 +7,6 @@ from typing import Any
 
 class AgentStatus(StrEnum):
     ACTIVE = "active"
-    PAUSED = "paused"
     DISCONNECTED = "disconnected"
 
 

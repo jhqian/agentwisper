@@ -61,7 +61,7 @@ class Broker:
         self._started = False
 
     async def _reset_active_agents_on_startup(self) -> None:
-        """Mark all active/paused agents as disconnected after broker restart.
+        """Mark all active agents as disconnected after broker restart.
 
         MCP connections are lost when the broker process exits. All agents
         must reconnect to resume operations. Already-disconnected agents
@@ -69,14 +69,14 @@ class Broker:
         """
         now = datetime.now(timezone.utc).isoformat()
         affected = await self._db.execute_fetchall(
-            "SELECT agent_id FROM agents WHERE status IN ('active', 'paused')"
+            "SELECT agent_id FROM agents WHERE status = 'active'"
         )
         if not affected:
             return
         await self._db.execute(
             "UPDATE agents SET status = 'disconnected', "
             "disconnected_at = ?, session_name = NULL "
-            "WHERE status IN ('active', 'paused')",
+            "WHERE status = 'active'",
             (now,),
         )
         logger.info(
@@ -127,44 +127,42 @@ class Broker:
 
     async def deregister_agent(self, agent_id: str) -> dict:
         self.unregister_wait(agent_id)
+        # If agent leads a squad, dissolve it before removing membership
+        agent_info = await self._registry.get_info(agent_id)
+        if agent_info and agent_info.get("squad_id"):
+            squad_id = agent_info["squad_id"]
+            role = await self._squad_mgr._squad_store.get_member_role(
+                squad_id, agent_id
+            )
+            if role == "leader":
+                # Clear squad_id for all members, then mark squad dissolved
+                members = await self._squad_mgr._squad_store.get_members(squad_id)
+                for member in members:
+                    if member["agent_id"] != agent_id:
+                        await self._db.execute(
+                            "UPDATE agents SET squad_id = NULL WHERE agent_id = ?",
+                            (member["agent_id"],),
+                        )
+                await self._squad_mgr._squad_store.dissolve(squad_id)
+
         await self._registry.deregister(agent_id)
+        # Release all resources associated with the agent
+        await self._sub_store.delete_by_agent(agent_id)
+        await self._db.execute(
+            "DELETE FROM squad_memberships WHERE agent_id = ?", (agent_id,)
+        )
+        await self._db.execute(
+            "DELETE FROM team_memberships WHERE agent_id = ?", (agent_id,)
+        )
+        await self._db.execute(
+            "UPDATE agents SET squad_id = NULL, current_team_id = NULL "
+            "WHERE agent_id = ?", (agent_id,)
+        )
         return {"status": "disconnected"}
 
     async def reconnect_agent(self, name: str, session_name: str | None = None) -> dict:
         """Reconnect a disconnected agent by name."""
         return await self._registry.reconnect(name, session_name=session_name)
-
-    async def pause_agent(self, agent_id: str) -> dict:
-        await self._registry.pause(agent_id)
-        return {"status": "paused"}
-
-    async def resume_agent(self, agent_id: str) -> dict:
-        return await self._registry.resume(agent_id)
-
-    async def wake_agent(self, agent_id: str, message: str | None = None) -> dict:
-        """Wake a paused agent and optionally inject a message.
-
-        Resumes the agent to active status, then if message is provided,
-        sends it as a P2P message from the system.
-        """
-        info = await self._registry.get_info(agent_id)
-        if info is None:
-            raise ValueError(f"Agent {agent_id} not found")
-
-        if info["status"] != "active":
-            await self._registry.resume(agent_id)
-
-        message_queued = False
-        if message:
-            await self._router.send_message(
-                sender_id="system",
-                recipient=agent_id,
-                payload=message,
-                msg_type=MessageType.NOTIFICATION,
-            )
-            message_queued = True
-
-        return {"status": "active", "message_queued": message_queued}
 
     async def get_agent_info(self, agent_id: str) -> dict | None:
         return await self._registry.get_info(agent_id)

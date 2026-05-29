@@ -78,7 +78,7 @@ async def agent_register(
 ) -> dict:
     """Register a new agent.
 
-    If the requested name is already taken by an active/paused agent,
+    If the requested name is already taken by an active agent,
     a numeric suffix is appended (e.g. "dev" -> "dev-1").
     Returns agent_id, assigned_name, and status.
     """
@@ -95,22 +95,6 @@ async def agent_deregister(agent_id: str, ctx: Context | None = None) -> dict:
 
 
 @mcp.tool()
-async def agent_pause(agent_id: str, ctx: Context | None = None) -> dict:
-    """Pause an agent. Accepts agent_id or name."""
-    broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
-    return await broker.pause_agent(agent_id)
-
-
-@mcp.tool()
-async def agent_resume(agent_id: str, ctx: Context | None = None) -> dict:
-    """Resume a paused agent. Accepts agent_id or name."""
-    broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
-    return await broker.resume_agent(agent_id)
-
-
-@mcp.tool()
 async def agent_info(agent_id: str, ctx: Context | None = None) -> dict | None:
     """Get agent details. Accepts agent_id or name."""
     broker = _get_broker(ctx)
@@ -123,18 +107,6 @@ async def agent_list(squad_id: str | None = None, ctx: Context | None = None) ->
     """List agents, optionally filtered by squad."""
     broker = _get_broker(ctx)
     return await broker.list_agents(squad_id)
-
-
-@mcp.tool()
-async def agent_wake(
-    agent_id: str,
-    message: str | None = None,
-    ctx: Context | None = None,
-) -> dict:
-    """Wake a paused agent and optionally inject a message. agent_id accepts agent_id or name."""
-    broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
-    return await broker.wake_agent(agent_id, message)
 
 
 @mcp.tool()

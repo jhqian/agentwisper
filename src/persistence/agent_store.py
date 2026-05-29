@@ -67,9 +67,9 @@ class AgentStore:
         )
 
     async def find_names_by_prefix(self, prefix: str) -> list[str]:
-        """Return all agent names matching prefix, including disconnected."""
+        """Return active agent names matching prefix, excluding disconnected."""
         rows = await self._db.execute_fetchall(
-            "SELECT name FROM agents WHERE name = ? OR name LIKE ?",
+            "SELECT name FROM agents WHERE status = 'active' AND (name = ? OR name LIKE ?)",
             (prefix, f"{prefix}-%"),
         )
         return [row["name"] for row in rows]

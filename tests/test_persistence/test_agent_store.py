@@ -42,13 +42,6 @@ async def test_get_nonexistent_agent(store):
     assert agent is None
 
 
-async def test_update_status(store):
-    agent_id = await store.create(name="test", capabilities=[])
-    await store.update_status(agent_id, AgentStatus.PAUSED)
-    agent = await store.get(agent_id)
-    assert agent["status"] == "paused"
-
-
 async def test_update_status_disconnected(store):
     agent_id = await store.create(name="test", capabilities=[])
     await store.update_status(agent_id, AgentStatus.DISCONNECTED)
@@ -169,11 +162,11 @@ async def test_find_names_by_prefix_does_not_overmatch(store):
     assert sorted(names) == ["dev", "dev-team"]
 
 
-async def test_find_names_includes_disconnected(store):
+async def test_find_names_excludes_disconnected(store):
     agent_id = await store.create(name="dev", capabilities=[])
     await store.update_status(agent_id, AgentStatus.DISCONNECTED)
     names = await store.find_names_by_prefix("dev")
-    assert names == ["dev"]
+    assert names == []
 
 
 async def test_update_status_sets_disconnected_at(store):

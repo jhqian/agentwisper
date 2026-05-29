@@ -64,19 +64,6 @@ async def test_p2p_send_by_name(router, agent_store):
     assert result["msg_id"].startswith("msg_")
 
 
-async def test_p2p_send_to_paused_agent(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
-    from common.types import AgentStatus
-    await agent_store.update_status(receiver, AgentStatus.PAUSED)
-    # Message should still be stored (buffered)
-    result = await router.send_message(
-        sender_id=sender, recipient=receiver,
-        payload='{}', msg_type=MessageType.P2P
-    )
-    assert result["msg_id"].startswith("msg_")
-
-
 async def test_rpc_request_and_response(router, agent_store):
     sender = await agent_store.create(name="caller", capabilities=[])
     receiver = await agent_store.create(name="worker", capabilities=[])
