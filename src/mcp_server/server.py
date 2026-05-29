@@ -54,11 +54,30 @@ def _get_broker(ctx: Context) -> Broker:
 async def _resolve_agent(broker: Broker, agent_id_or_name: str) -> str:
     """Resolve agent_id or name to agent_id.
 
-    Tries agent_id lookup first, then falls back to name lookup.
-    Returns the original string if neither matches (let downstream raise).
+    Raises ValueError if agent not found or is disconnected.
     """
     resolved = await broker._registry.resolve_recipient(agent_id_or_name)
-    return resolved if resolved is not None else agent_id_or_name
+    if resolved is None:
+        raise ValueError(
+            f"Agent '{agent_id_or_name}' not found or is disconnected"
+        )
+    return resolved
+
+
+async def _resolve_agent_any_status(broker: Broker, agent_id_or_name: str) -> str:
+    """Resolve agent_id or name, including disconnected agents.
+
+    Raises ValueError if agent not found.
+    """
+    # Try by agent_id first
+    agent = await broker._registry.get_info(agent_id_or_name)
+    if agent is not None:
+        return agent["agent_id"]
+    # Try by name
+    agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
+    if agent is not None:
+        return agent["agent_id"]
+    raise ValueError(f"Agent '{agent_id_or_name}' not found")
 
 
 
@@ -90,15 +109,18 @@ async def agent_register(
 async def agent_deregister(agent_id: str, ctx: Context | None = None) -> dict:
     """Remove an agent. Accepts agent_id or name."""
     broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
+    agent_id = await _resolve_agent_any_status(broker, agent_id)
     return await broker.deregister_agent(agent_id)
 
 
 @mcp.tool()
 async def agent_info(agent_id: str, ctx: Context | None = None) -> dict | None:
-    """Get agent details. Accepts agent_id or name."""
+    """Get agent details. Accepts agent_id or name. Returns None if not found."""
     broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
+    try:
+        agent_id = await _resolve_agent_any_status(broker, agent_id)
+    except ValueError:
+        return None
     return await broker.get_agent_info(agent_id)
 
 
@@ -171,7 +193,7 @@ async def squad_join(
 async def squad_leave(agent_id: str, ctx: Context | None = None) -> dict:
     """Leave current squad (any member). Accepts agent_id or name."""
     broker = _get_broker(ctx)
-    agent_id = await _resolve_agent(broker, agent_id)
+    agent_id = await _resolve_agent_any_status(broker, agent_id)
     return await broker.leave_squad(agent_id)
 
 
