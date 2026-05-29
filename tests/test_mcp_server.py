@@ -107,6 +107,61 @@ async def test_agent_reconnect_not_found(mock_context):
 
 
 # ---------------------------------------------------------------------------
+# Unified agent-not-found errors
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_agent_raises_for_nonexistent(mock_context):
+    from mcp_server.server import _resolve_agent, message_send
+
+    with pytest.raises(ValueError, match="not found or is disconnected"):
+        await _resolve_agent(mock_context.request_context.lifespan_context, "ghost")
+
+
+async def test_message_send_sender_not_found(mock_context):
+    from mcp_server.server import agent_register, message_send
+
+    r = await agent_register("receiver", [], ctx=mock_context)
+    with pytest.raises(ValueError, match="not found or is disconnected"):
+        await message_send("nonexistent", r["agent_id"], "hello", ctx=mock_context)
+
+
+async def test_message_poll_agent_not_found(mock_context):
+    from mcp_server.server import message_poll
+
+    with pytest.raises(ValueError, match="not found or is disconnected"):
+        await message_poll("nonexistent", ctx=mock_context)
+
+
+async def test_message_wait_agent_not_found(mock_context):
+    from mcp_server.server import message_wait
+
+    with pytest.raises(ValueError, match="not found or is disconnected"):
+        await message_wait("nonexistent", timeout=0, ctx=mock_context)
+
+
+async def test_topic_subscribe_agent_not_found(mock_context):
+    from mcp_server.server import topic_subscribe
+
+    with pytest.raises(ValueError, match="not found or is disconnected"):
+        await topic_subscribe("nonexistent", "alerts", ctx=mock_context)
+
+
+async def test_agent_info_returns_none_for_nonexistent(mock_context):
+    from mcp_server.server import agent_info
+
+    result = await agent_info("nonexistent", ctx=mock_context)
+    assert result is None
+
+
+async def test_agent_deregister_not_found(mock_context):
+    from mcp_server.server import agent_deregister
+
+    with pytest.raises(ValueError, match="not found"):
+        await agent_deregister("nonexistent", ctx=mock_context)
+
+
+# ---------------------------------------------------------------------------
 # Squad Management
 # ---------------------------------------------------------------------------
 
