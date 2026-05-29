@@ -471,6 +471,14 @@ def create_server() -> FastMCP:
 
 def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     """Run the MCP server with streamable-http transport."""
+    import logging
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
     mcp.settings.port = port
     mcp.settings.host = host
     mcp.run(transport="streamable-http")

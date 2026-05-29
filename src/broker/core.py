@@ -119,6 +119,10 @@ class Broker:
         session_name: str | None = None,
     ) -> dict:
         result = await self._registry.register(name, capabilities, metadata, session_name=session_name)
+        logger.info(
+            "Agent registered: %s (%s) capabilities=%s session=%s",
+            result["assigned_name"], result["agent_id"], capabilities, session_name,
+        )
         return {
             "agent_id": result["agent_id"],
             "assigned_name": result["assigned_name"],
@@ -129,6 +133,7 @@ class Broker:
         self.unregister_wait(agent_id)
         # If agent leads a squad, dissolve it before removing membership
         agent_info = await self._registry.get_info(agent_id)
+        agent_name = agent_info.get("name", "?") if agent_info else "?"
         if agent_info and agent_info.get("squad_id"):
             squad_id = agent_info["squad_id"]
             role = await self._squad_mgr._squad_store.get_member_role(
@@ -144,6 +149,7 @@ class Broker:
                             (member["agent_id"],),
                         )
                 await self._squad_mgr._squad_store.dissolve(squad_id)
+                logger.info("Squad %s dissolved (leader %s deregistered)", squad_id, agent_name)
 
         await self._registry.deregister(agent_id)
         # Release all resources associated with the agent
@@ -158,11 +164,17 @@ class Broker:
             "UPDATE agents SET squad_id = NULL, current_team_id = NULL "
             "WHERE agent_id = ?", (agent_id,)
         )
+        logger.info("Agent deregistered: %s (%s)", agent_name, agent_id)
         return {"status": "disconnected"}
 
     async def reconnect_agent(self, name: str, session_name: str | None = None) -> dict:
         """Reconnect a disconnected agent by name."""
-        return await self._registry.reconnect(name, session_name=session_name)
+        result = await self._registry.reconnect(name, session_name=session_name)
+        logger.info(
+            "Agent reconnected: %s (%s) session=%s buffered=%d",
+            name, result["agent_id"], session_name, result.get("buffered_count", 0),
+        )
+        return result
 
     async def get_agent_info(self, agent_id: str) -> dict | None:
         return await self._registry.get_info(agent_id)
@@ -261,6 +273,11 @@ class Broker:
         )
         recipient_id = result.get("recipient_id", recipient)
         await self._notify_recipients([recipient_id])
+        logger.info(
+            "Message sent: %s -> %s type=%s msg_id=%s payload=%.120s",
+            sender_id, recipient_id, msg_type, result.get("msg_id"),
+            payload,
+        )
         return result
 
     async def broadcast_message(
@@ -277,12 +294,21 @@ class Broker:
         subscriber_ids = result.get("subscriber_ids", [])
         if subscriber_ids:
             await self._notify_recipients(subscriber_ids)
+        logger.info(
+            "Broadcast: %s -> topic=%s subscribers=%d squad=%s msg_id=%s payload=%.120s",
+            sender_id, topic, len(subscriber_ids), squad_id,
+            result.get("msg_id"), payload,
+        )
         return result
 
     async def poll_messages(
         self, agent_id: str, limit: int = 50, unread_only: bool = True
     ) -> dict:
         messages = await self._router.poll_messages(agent_id, limit, unread_only)
+        if messages:
+            logger.info(
+                "Messages polled: agent=%s count=%d", agent_id, len(messages),
+            )
         return {"messages": messages}
 
     # ------------------------------------------------------------------
