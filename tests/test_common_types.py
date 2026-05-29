@@ -26,7 +26,6 @@ def test_agent_record_creation():
 
 def test_agent_status_values():
     assert AgentStatus.ACTIVE == "active"
-    assert AgentStatus.PAUSED == "paused"
     assert AgentStatus.DISCONNECTED == "disconnected"
 
 

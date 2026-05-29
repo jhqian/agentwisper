@@ -94,38 +94,6 @@ class AgentRegistry:
         """Retrieve agent information by ID."""
         return await self._agent_store.get(agent_id)
 
-    async def pause(self, agent_id: str) -> None:
-        """Pause an active agent.
-
-        Only agents in 'active' status can be paused.
-        Raises ValueError if agent not found or not active.
-        """
-        agent = await self._agent_store.get(agent_id)
-        if agent is None:
-            raise ValueError(f"Agent {agent_id} not found")
-        if agent["status"] != AgentStatus.ACTIVE:
-            raise ValueError(
-                f"Cannot pause agent in status '{agent['status']}'"
-            )
-        await self._agent_store.update_status(agent_id, AgentStatus.PAUSED)
-
-    async def resume(self, agent_id: str) -> dict[str, Any]:
-        """Resume a paused agent.
-
-        Only agents in 'paused' status can be resumed.
-        Returns dict with new status and count of buffered (pending) messages.
-        """
-        agent = await self._agent_store.get(agent_id)
-        if agent is None:
-            raise ValueError(f"Agent {agent_id} not found")
-        if agent["status"] != AgentStatus.PAUSED:
-            raise ValueError(
-                f"Cannot resume agent in status '{agent['status']}'"
-            )
-        await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
-        buffered = await self._message_store.get_pending_for_agent(agent_id)
-        return {"status": "active", "buffered_count": len(buffered)}
-
     async def resolve_recipient(self, name_or_id: str) -> str | None:
         """Resolve a recipient identifier to an agent_id.
 

@@ -80,21 +80,63 @@ async def test_broker_status(broker):
     assert "waiting_agents" in status
 
 
-async def test_broker_pause_resume(broker):
-    r = await broker.register_agent("test", [])
-    await broker.pause_agent(r["agent_id"])
-    info = await broker.get_agent_info(r["agent_id"])
-    assert info["status"] == "paused"
-    result = await broker.resume_agent(r["agent_id"])
-    assert result["status"] == "active"
-
-
 async def test_broker_deregister(broker):
     r = await broker.register_agent("test", [])
     await broker.deregister_agent(r["agent_id"])
     info = await broker.get_agent_info(r["agent_id"])
     assert info is not None
     assert info["status"] == "disconnected"
+
+
+async def test_broker_deregister_releases_name(broker):
+    r = await broker.register_agent("dev", ["code"])
+    await broker.deregister_agent(r["agent_id"])
+    r2 = await broker.register_agent("dev", ["test"])
+    assert r2["assigned_name"] == "dev"
+
+
+async def test_broker_deregister_releases_subscriptions(broker):
+    r = await broker.register_agent("sub", ["code"])
+    await broker.subscribe_topic(r["agent_id"], "alerts")
+    await broker.deregister_agent(r["agent_id"])
+    subs = await broker._sub_store.list_by_agent(r["agent_id"])
+    assert len(subs) == 0
+
+
+async def test_broker_deregister_releases_squad_membership(broker):
+    r1 = await broker.register_agent("leader", [])
+    r2 = await broker.register_agent("member", [])
+    squad = await broker.create_squad("team", r1["agent_id"])
+    await broker.join_squad(squad["squad_id"], r2["agent_id"], "member", r1["agent_id"])
+    await broker.deregister_agent(r2["agent_id"])
+    info = await broker.get_squad_info(squad["squad_id"])
+    member_ids = [m["agent_id"] for m in info["members"]]
+    assert r2["agent_id"] not in member_ids
+
+
+async def test_broker_deregister_leader_dissolves_squad(broker):
+    r1 = await broker.register_agent("leader", [])
+    r2 = await broker.register_agent("member", [])
+    squad = await broker.create_squad("team", r1["agent_id"])
+    await broker.join_squad(squad["squad_id"], r2["agent_id"], "member", r1["agent_id"])
+
+    await broker.deregister_agent(r1["agent_id"])
+
+    # Squad should be dissolved
+    info = await broker.get_squad_info(squad["squad_id"])
+    assert info["squad"]["status"] == "dissolved"
+
+    # Other member's squad_id should be cleared
+    member_info = await broker.get_agent_info(r2["agent_id"])
+    assert member_info["squad_id"] is None
+
+
+async def test_broker_deregister_clears_agent_refs(broker):
+    r = await broker.register_agent("test", [])
+    await broker.deregister_agent(r["agent_id"])
+    info = await broker.get_agent_info(r["agent_id"])
+    assert info["squad_id"] is None
+    assert info["current_team_id"] is None
 
 
 async def test_broker_send_notifies_wait_event(broker):
@@ -118,25 +160,6 @@ async def test_broker_register_wait_and_notify(broker):
     assert event.is_set()
     broker.unregister_wait(r["agent_id"])
     assert r["agent_id"] not in broker._wait_events
-
-
-async def test_broker_wake_agent(broker):
-    r = await broker.register_agent("sleepy", [])
-    await broker.pause_agent(r["agent_id"])
-    info = await broker.get_agent_info(r["agent_id"])
-    assert info["status"] == "paused"
-    result = await broker.wake_agent(r["agent_id"], message="Wake up!")
-    assert result["status"] == "active"
-    assert result["message_queued"] is True
-    info = await broker.get_agent_info(r["agent_id"])
-    assert info["status"] == "active"
-
-
-async def test_broker_wake_already_active_agent(broker):
-    r = await broker.register_agent("active-agent", [])
-    result = await broker.wake_agent(r["agent_id"], message="Hello")
-    assert result["status"] == "active"
-    assert result["message_queued"] is True
 
 
 async def test_broker_register_duplicate_name_gets_suffix(broker):
@@ -239,7 +262,7 @@ async def test_broker_cleanup_preserves_recent(tmp_path):
 
 
 async def test_broker_start_resets_active_agents(tmp_path):
-    """Broker restart marks all active/paused agents as disconnected."""
+    """Broker restart marks all active agents as disconnected."""
     db_path = str(tmp_path / "test.db")
     config = BrokerConfig(db_path=db_path)
 
@@ -248,7 +271,6 @@ async def test_broker_start_resets_active_agents(tmp_path):
     await b1.start()
     r1 = await b1.register_agent("alice", ["code"], session_name="sess_1")
     r2 = await b1.register_agent("bob", ["review"], session_name="sess_2")
-    await b1.pause_agent(r2["agent_id"])
     await b1.stop()
 
     # Second broker session (simulates restart): agents should be disconnected

@@ -5,9 +5,6 @@
 import pytest
 from broker.agent_registry import AgentRegistry
 from persistence.database import AsyncDatabase
-from persistence.agent_store import AgentStore
-from persistence.message_store import MessageStore
-from common.types import MessageType
 
 
 @pytest.fixture
@@ -43,49 +40,6 @@ async def test_deregister(registry):
 async def test_deregister_nonexistent(registry):
     with pytest.raises(ValueError, match="not found"):
         await registry.deregister("agent_nonexistent")
-
-
-async def test_pause_and_resume(registry):
-    result = await registry.register(name="test", capabilities=[])
-    agent_id = result["agent_id"]
-    await registry.pause(agent_id)
-    info = await registry.get_info(agent_id)
-    assert info["status"] == "paused"
-
-    res = await registry.resume(agent_id)
-    assert res["status"] == "active"
-    info = await registry.get_info(agent_id)
-    assert info["status"] == "active"
-
-
-async def test_resume_returns_buffered_count(registry, db):
-    result = await registry.register(name="test", capabilities=[])
-    agent_id = result["agent_id"]
-    await registry.pause(agent_id)
-    # Send a message to the paused agent
-    msg_store = MessageStore(db)
-    sender = await AgentStore(db).create(name="sender", capabilities=[])
-    await msg_store.create(
-        sender_id=sender,
-        recipient_id=agent_id,
-        msg_type=MessageType.P2P,
-        payload="{}",
-    )
-    res = await registry.resume(agent_id)
-    assert res["buffered_count"] == 1
-
-
-async def test_pause_non_active_fails(registry):
-    result = await registry.register(name="test", capabilities=[])
-    await registry.pause(result["agent_id"])
-    with pytest.raises(ValueError, match="Cannot pause"):
-        await registry.pause(result["agent_id"])
-
-
-async def test_resume_non_paused_fails(registry):
-    result = await registry.register(name="test", capabilities=[])
-    with pytest.raises(ValueError, match="Cannot resume"):
-        await registry.resume(result["agent_id"])
 
 
 async def test_resolve_by_id(registry):
@@ -162,11 +116,11 @@ async def test_register_independent_bases(registry):
 
 
 async def test_register_reclaim_after_deregister(registry):
-    """After deregister, name is held by disconnected agent — new reg gets suffix."""
+    """After deregister, name is released — new reg gets the same name."""
     r1 = await registry.register(name="dev", capabilities=[])
     await registry.deregister(r1["agent_id"])
     r2 = await registry.register(name="dev", capabilities=[])
-    assert r2["assigned_name"] == "dev-1"
+    assert r2["assigned_name"] == "dev"
 
 
 # ---------------------------------------------------------------------------
@@ -242,13 +196,6 @@ async def test_reconnect_preserves_capabilities(registry):
 async def test_reconnect_active_agent_error_mentions_status(registry):
     await registry.register(name="dev", capabilities=[])
     with pytest.raises(ValueError, match="status 'active'"):
-        await registry.reconnect(name="dev")
-
-
-async def test_reconnect_paused_agent_error_mentions_status(registry):
-    r = await registry.register(name="dev", capabilities=[])
-    await registry.pause(r["agent_id"])
-    with pytest.raises(ValueError, match="status 'paused'"):
         await registry.reconnect(name="dev")
 
 

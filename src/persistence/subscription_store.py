@@ -48,6 +48,18 @@ class SubscriptionStore:
             "DELETE FROM subscriptions WHERE sub_id = ?", (sub_id,)
         )
 
+    async def delete_by_agent(self, agent_id: str) -> int:
+        """Delete all subscriptions for an agent. Returns count deleted."""
+        result = await self._db.execute_fetchall(
+            "SELECT sub_id FROM subscriptions WHERE agent_id = ?", (agent_id,)
+        )
+        if not result:
+            return 0
+        await self._db.execute(
+            "DELETE FROM subscriptions WHERE agent_id = ?", (agent_id,)
+        )
+        return len(result)
+
     async def get_subscribers(
         self, topic: str, squad_id: str | None = None
     ) -> list[str]:

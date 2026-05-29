@@ -44,20 +44,18 @@ async def test_agent_register_tool(mock_context):
 async def test_agent_lifecycle_tools(mock_context):
     from mcp_server.server import (
         agent_register,
-        agent_pause,
-        agent_resume,
+        agent_deregister,
         agent_info,
     )
 
     reg = await agent_register("test", [], ctx=mock_context)
     agent_id = reg["agent_id"]
 
-    await agent_pause(agent_id, ctx=mock_context)
-    info = await agent_info(agent_id, ctx=mock_context)
-    assert info["status"] == "paused"
+    result = await agent_deregister(agent_id, ctx=mock_context)
+    assert result["status"] == "disconnected"
 
-    result = await agent_resume(agent_id, ctx=mock_context)
-    assert result["status"] == "active"
+    info = await agent_info(agent_id, ctx=mock_context)
+    assert info["status"] == "disconnected"
 
 
 async def test_agent_list_tool(mock_context):
