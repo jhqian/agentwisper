@@ -117,7 +117,7 @@ class Broker:
                     for agent_id in ids:
                         self.unregister_wait(agent_id)
                     names = ", ".join(row["name"] for row in stale)
-                    logger.info(
+                    logger.debug(
                         "Liveness: %d agent(s) marked disconnected (inactive > %ds): %s",
                         len(stale), timeout_secs, names,
                     )
