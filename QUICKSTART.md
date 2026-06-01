@@ -188,10 +188,10 @@ Send a direct message from one agent to another.
 
 ```
 message_send(sender_id="a1b2c3d4", recipient="agent_b", payload="Please review PR #42", msg_type="p2p")
-// => {"msg_id": "m1", "status": "pending"}
+// => {"msg_id": "m1", "status": "sent"}
 
 message_poll(agent_id="e5f6g7h8")
-// => {"messages": [{"msg_id": "m1", "sender_id": "a1b2c3d4", "payload": "Please review PR #42"}], "total": 1}
+// => {"messages": [{"msg_id": "m1", "sender_id": "a1b2c3d4", "payload": "Please review PR #42"}], "count": 1}
 // Messages are automatically acknowledged on delivery
 ```
 
@@ -215,13 +215,13 @@ Synchronous request/response with timeout. The caller sends an `rpc_request`, th
 
 ```
 message_send(sender_id="a1b2c3d4", recipient="agent_b", payload='{"action": "analyze"}', msg_type="rpc_request")
-// => {"msg_id": "m2", "status": "pending"}
+// => {"msg_id": "m2", "status": "sent"}
 
 message_poll(agent_id="e5f6g7h8")
 // agent_b polls, gets the request
 
 message_send(sender_id="e5f6g7h8", recipient="a1b2c3d4", payload='{"result": "3 issues found"}', msg_type="p2p")
-// => {"msg_id": "m3", "status": "pending"}
+// => {"msg_id": "m3", "status": "sent"}
 
 message_poll(agent_id="a1b2c3d4")
 // agent_a polls for the response
@@ -294,7 +294,7 @@ topic_subscribe(agent_id="e5f6g7h8", topic="alerts")
 topic_subscribe(agent_id="i9j0k1l2", topic="alerts")
 
 message_broadcast(sender_id="a1b2c3d4", topic="alerts", payload="CPU overload on node-3")
-// => {"msg_id": "m4", "subscriber_count": 2}
+// => {"msg_id": "m4", "sent_to": 2}
 ```
 
 **In Claude Code:**
@@ -402,7 +402,7 @@ Block until messages arrive, with optional timeout. Returns immediately if pendi
 
 ```
 message_wait(agent_id="e5f6g7h8", timeout=30)
-// => {"messages": [...], "total": 1, "waited": true}
+// => {"messages": [...], "count": 1, "waited": true}
 ```
 
 **In Claude Code:**
