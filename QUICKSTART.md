@@ -27,7 +27,7 @@ uv run pytest --co -q
 
 ## Using Tools in MCP Clients
 
-The broker exposes 28 MCP tools via streamable-http transport. In AI-powered clients like Claude Code, you invoke them through **natural language** -- the client translates your request into the appropriate tool call. In programmatic clients, you call tools directly by name.
+The broker exposes 26 MCP tools via streamable-http transport. In AI-powered clients like Claude Code, you invoke them through **natural language** -- the client translates your request into the appropriate tool call. In programmatic clients, you call tools directly by name.
 
 ### Claude Code (with Plugin)
 
@@ -362,26 +362,15 @@ agent_resume(agent_id="e5f6g7h8")
 
 Only agents in `active` status can be paused. Only agents in `paused` status can be resumed. `buffered_count` reports how many messages were held.
 
-### Heartbeat
+### Liveness Detection
 
-Agents signal liveness to the broker. The broker runs a background monitor that marks agents as `disconnected` after the timeout elapses.
+The broker tracks agent activity automatically. Every MCP tool call updates a `last_seen` timestamp. A background monitor marks agents as `disconnected` if they are inactive beyond the timeout.
 
-**Tool call:**
+No explicit heartbeat tool is needed -- any tool call (poll, send, subscribe, etc.) serves as a liveness signal.
 
-```
-heartbeat(agent_id="a1b2c3d4")
-// => {"status": "active", "last_heartbeat": "2026-05-11T04:52:42Z"}
-```
-
-**In Claude Code:**
-
-```
-> Send a heartbeat to keep my agent alive
-```
-
-- Default interval: 30 seconds (`AGENTSQUAD_HEARTBEAT_INTERVAL`)
-- Default timeout: 90 seconds (`AGENTSQUAD_HEARTBEAT_TIMEOUT`)
-- A disconnected agent sending a heartbeat is **auto-restored** to `active` status
+- Default check interval: 30 seconds (`AGENTSQUAD_LIVENESS_INTERVAL`)
+- Default inactivity timeout: 90 seconds (`AGENTSQUAD_LIVENESS_TIMEOUT`)
+- A disconnected agent making any MCP call is **auto-restored** to `active` status
 
 ### Message Notification
 
@@ -456,7 +445,7 @@ tests/
   conftest.py                  # Shared fixtures
   test_common/                 # Types and config tests
   test_persistence/            # Store layer tests
-  test_broker/                 # Registry, manager, router, heartbeat, core
+  test_broker/                 # Registry, manager, router, core
   test_mcp_server/             # MCP tool integration tests
   test_integration/            # P2P, RPC, Pub/Sub, lifecycle flows
   smoke_test.py                # Quick validation
@@ -470,8 +459,8 @@ Environment variables use the `AGENTSQUAD_` prefix:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AGENTSQUAD_DB_PATH` | `agentsquad.db` | SQLite database file path |
-| `AGENTSQUAD_HEARTBEAT_INTERVAL` | `30` | Seconds between heartbeat checks |
-| `AGENTSQUAD_HEARTBEAT_TIMEOUT` | `90` | Seconds before agent marked offline |
+| `AGENTSQUAD_LIVENESS_INTERVAL` | `30` | Seconds between liveness checks |
+| `AGENTSQUAD_LIVENESS_TIMEOUT` | `90` | Seconds before inactive agent marked offline |
 | `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
 | `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
 | `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
