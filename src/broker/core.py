@@ -116,9 +116,10 @@ class Broker:
                     )
                     for agent_id in ids:
                         self.unregister_wait(agent_id)
+                    names = ", ".join(row["name"] for row in stale)
                     logger.info(
-                        "Liveness: %d agent(s) marked disconnected (inactive > %ds)",
-                        len(stale), timeout_secs,
+                        "Liveness: %d agent(s) marked disconnected (inactive > %ds): %s",
+                        len(stale), timeout_secs, names,
                     )
 
         self._liveness_task = asyncio.create_task(_monitor_loop())
@@ -146,6 +147,14 @@ class Broker:
     def unregister_wait(self, agent_id: str) -> None:
         """Remove wait event after message_wait completes."""
         self._wait_events.pop(agent_id, None)
+
+    async def _agent_label(self, agent_id: str) -> str:
+        """Return 'name (agent_id_short)' for logging, or short id if not found."""
+        agent = await self._registry.get_info(agent_id)
+        if agent:
+            short = agent_id[-8:]
+            return f"{agent['name']} ({short})"
+        return agent_id[-8:]
 
     async def _try_restore_by_name_or_id(self, identifier: str) -> None:
         """Auto-restore a disconnected agent when referenced by ID or name."""
@@ -330,9 +339,11 @@ class Broker:
         )
         recipient_id = result.get("recipient_id", recipient)
         await self._notify_recipients([recipient_id])
+        sender_label = await self._agent_label(sender_id)
+        recipient_label = await self._agent_label(recipient_id)
         logger.info(
             "Message sent: %s -> %s type=%s msg_id=%s payload=%.120s",
-            sender_id, recipient_id, msg_type, result.get("msg_id"),
+            sender_label, recipient_label, msg_type, result.get("msg_id"),
             payload,
         )
         return result
@@ -353,7 +364,7 @@ class Broker:
             await self._notify_recipients(subscriber_ids)
         logger.info(
             "Broadcast: %s -> topic=%s subscribers=%d squad=%s msg_id=%s payload=%.120s",
-            sender_id, topic, len(subscriber_ids), squad_id,
+            await self._agent_label(sender_id), topic, len(subscriber_ids), squad_id,
             result.get("msg_id"), payload,
         )
         return result
@@ -364,7 +375,8 @@ class Broker:
         messages = await self._router.poll_messages(agent_id, limit, unread_only)
         if messages:
             logger.info(
-                "Messages polled: agent=%s count=%d", agent_id, len(messages),
+                "Messages polled: agent=%s count=%d",
+                await self._agent_label(agent_id), len(messages),
             )
         return {"messages": messages}
 
