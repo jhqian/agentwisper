@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
-from common.types import MessageType, SquadRole
+from common.types import MessageStatus, MessageType, SquadRole
 from persistence.agent_store import AgentStore
 from persistence.database import AsyncDatabase
 from persistence.message_store import MessageStore
@@ -205,15 +206,37 @@ class MessageRouter:
             agent_id, limit=limit
         )
 
-        # Mark all direct messages as delivered and acknowledged
-        for msg in direct_messages:
-            await self._message_store.mark_delivered(msg["msg_id"])
-            await self._message_store.mark_acknowledged(msg["msg_id"])
+        # Mark all direct messages as delivered and acknowledged (batched)
+        if direct_messages:
+            direct_ids = [msg["msg_id"] for msg in direct_messages]
+            now_iso = datetime.now(timezone.utc).isoformat()
+            ph = ",".join("?" * len(direct_ids))
+            await self._db.execute(
+                f"UPDATE messages SET status = ?, delivered_at = ? "
+                f"WHERE msg_id IN ({ph})",
+                (MessageStatus.DELIVERED, now_iso, *direct_ids),
+            )
+            await self._db.execute(
+                f"UPDATE messages SET status = ? "
+                f"WHERE msg_id IN ({ph})",
+                (MessageStatus.ACKNOWLEDGED, *direct_ids),
+            )
 
-        # Mark all delivery logs as delivered and acknowledged
-        for dlv in delivery_messages:
-            await self._message_store.mark_delivery_delivered(dlv["delivery_id"])
-            await self._message_store.mark_delivery_acknowledged(dlv["delivery_id"])
+        # Mark all delivery logs as delivered and acknowledged (batched)
+        if delivery_messages:
+            delivery_ids = [dlv["delivery_id"] for dlv in delivery_messages]
+            now_iso = datetime.now(timezone.utc).isoformat()
+            ph = ",".join("?" * len(delivery_ids))
+            await self._db.execute(
+                f"UPDATE delivery_logs SET status = ?, delivered_at = ? "
+                f"WHERE delivery_id IN ({ph})",
+                (MessageStatus.DELIVERED, now_iso, *delivery_ids),
+            )
+            await self._db.execute(
+                f"UPDATE delivery_logs SET status = ? "
+                f"WHERE delivery_id IN ({ph})",
+                (MessageStatus.ACKNOWLEDGED, *delivery_ids),
+            )
 
         # Combine results: direct messages first, then delivery log entries
         combined: list[dict[str, Any]] = []
