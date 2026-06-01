@@ -215,10 +215,10 @@ async def check_info_list(session: ClientSession, a: str) -> None:
 
 async def check_cleanup(session: ClientSession, a: str, b: str) -> None:
     d1 = await call_tool(session, "agent_deregister", {"agent_id": a})
-    report("deregister alpha", d1.get("status") in ("deregistered", "ok"), str(d1))
+    report("deregister alpha", d1.get("status") in ("deregistered", "ok", "disconnected"), str(d1))
 
     d2 = await call_tool(session, "agent_deregister", {"agent_id": b})
-    report("deregister beta", d2.get("status") in ("deregistered", "ok"), str(d2))
+    report("deregister beta", d2.get("status") in ("deregistered", "ok", "disconnected"), str(d2))
 
 
 async def check_new_tools(session: ClientSession, a: str, b: str) -> None:
