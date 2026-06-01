@@ -54,8 +54,9 @@ async def test_agent_lifecycle_tools(mock_context):
     result = await agent_deregister(agent_id, ctx=mock_context)
     assert result["status"] == "disconnected"
 
+    # agent_info auto-restores disconnected agents
     info = await agent_info(agent_id, ctx=mock_context)
-    assert info["status"] == "disconnected"
+    assert info["status"] == "active"
 
 
 async def test_agent_list_tool(mock_context):
@@ -74,8 +75,9 @@ async def test_agent_deregister_tool(mock_context):
     reg = await agent_register("x", [], ctx=mock_context)
     result = await agent_deregister(reg["agent_id"], ctx=mock_context)
     assert result["status"] == "disconnected"
+    # agent_info auto-restores disconnected agents
     info = await agent_info(reg["agent_id"], ctx=mock_context)
-    assert info["status"] == "disconnected"
+    assert info["status"] == "active"
 
 
 async def test_agent_register_with_session_name(mock_context):
@@ -159,6 +161,106 @@ async def test_agent_deregister_not_found(mock_context):
 
     with pytest.raises(ValueError, match="not found"):
         await agent_deregister("nonexistent", ctx=mock_context)
+
+
+# ---------------------------------------------------------------------------
+# Auto-restore: disconnected agents are restored on first MCP call
+# ---------------------------------------------------------------------------
+
+
+async def test_auto_restore_on_message_send(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, message_send, agent_info
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("receiver", [], ctx=mock_context)
+
+    # Disconnect sender
+    await agent_deregister(r1["agent_id"], ctx=mock_context)
+
+    # Sending a message auto-restores the disconnected sender
+    msg = await message_send(r1["agent_id"], r2["agent_id"], "hello after restore", ctx=mock_context)
+    assert "msg_id" in msg
+    assert msg["status"] == "sent"
+    assert "recipient_id" not in msg
+
+    info = await agent_info(r1["agent_id"], ctx=mock_context)
+    assert info["status"] == "active"
+
+
+async def test_auto_restore_on_message_poll(mock_context):
+    from mcp_server.server import agent_register, message_send, message_poll, agent_info
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("receiver", [], ctx=mock_context)
+
+    # Send a message to r2, then disconnect r2
+    await message_send(r1["agent_id"], r2["agent_id"], "pending-msg", ctx=mock_context)
+    from mcp_server.server import agent_deregister
+    await agent_deregister(r2["agent_id"], ctx=mock_context)
+
+    # Polling auto-restores the disconnected receiver
+    result = await message_poll(r2["agent_id"], ctx=mock_context)
+    assert result["count"] >= 1
+
+    info = await agent_info(r2["agent_id"], ctx=mock_context)
+    assert info["status"] == "active"
+
+
+async def test_auto_restore_on_subscribe(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, topic_subscribe, agent_info
+
+    reg = await agent_register("sub", [], ctx=mock_context)
+    await agent_deregister(reg["agent_id"], ctx=mock_context)
+
+    # Subscribing auto-restores the disconnected agent
+    sub = await topic_subscribe(reg["agent_id"], "alerts", ctx=mock_context)
+    assert "sub_id" in sub
+
+    info = await agent_info(reg["agent_id"], ctx=mock_context)
+    assert info["status"] == "active"
+
+
+async def test_auto_restore_preserves_squad_after_broker_restart(mock_context):
+    """Simulate broker restart: agent marked disconnected, but squad resources preserved."""
+    from mcp_server.server import (
+        agent_register, squad_create, squad_join, squad_info, agent_info,
+    )
+
+    leader = await agent_register("leader", [], ctx=mock_context)
+    member = await agent_register("member", [], ctx=mock_context)
+    squad = await squad_create("dev-team", leader["agent_id"], ctx=mock_context)
+    await squad_join(
+        squad["squad_id"], member["agent_id"],
+        caller_id=leader["agent_id"], ctx=mock_context,
+    )
+
+    # Simulate broker restart by directly disconnecting in DB (no resource cleanup)
+    broker = mock_context.request_context.lifespan_context
+    from common.types import AgentStatus
+    await broker._registry._agent_store.update_status(member["agent_id"], AgentStatus.DISCONNECTED)
+
+    # Any MCP call auto-restores the agent
+    info = await agent_info(member["agent_id"], ctx=mock_context)
+    assert info["status"] == "active"
+    # Squad membership preserved (was never deregister-cleaned)
+    assert info["squad_id"] == squad["squad_id"]
+
+
+async def test_auto_restore_by_name(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, message_send, agent_info
+
+    r1 = await agent_register("sender", [], ctx=mock_context)
+    r2 = await agent_register("receiver", [], ctx=mock_context)
+
+    await agent_deregister(r2["agent_id"], ctx=mock_context)
+
+    # Sending to a disconnected agent by name auto-restores it
+    msg = await message_send(r1["agent_id"], "receiver", "hello", ctx=mock_context)
+    assert "msg_id" in msg
+    assert msg["status"] == "sent"
+
+    info = await agent_info(r2["agent_id"], ctx=mock_context)
+    assert info["status"] == "active"
 
 
 # ---------------------------------------------------------------------------
@@ -273,9 +375,11 @@ async def test_message_send_and_poll(mock_context):
         r1["agent_id"], r2["agent_id"], '{"hello": true}', ctx=mock_context
     )
     assert "msg_id" in msg
+    assert msg["status"] == "sent"
+    assert "recipient_id" not in msg
 
     polled = await message_poll(r2["agent_id"], ctx=mock_context)
-    assert polled["total"] >= 1
+    assert polled["count"] >= 1
     assert polled["messages"][0]["payload"] == '{"hello": true}'
 
 
@@ -294,10 +398,11 @@ async def test_message_broadcast_tool(mock_context):
     result = await message_broadcast(
         a1["agent_id"], "events", '{"event": "test"}', ctx=mock_context
     )
-    assert result["subscriber_count"] == 1
+    assert result["sent_to"] == 1
+    assert "subscriber_ids" not in result
 
     polled = await message_poll(a2["agent_id"], ctx=mock_context)
-    assert polled["total"] >= 1
+    assert polled["count"] >= 1
 
 
 async def test_message_query_tool(mock_context):
@@ -310,7 +415,7 @@ async def test_message_query_tool(mock_context):
     await message_send(r1["agent_id"], r2["agent_id"], "msg2", ctx=mock_context)
 
     result = await message_query(sender=r1["agent_id"], ctx=mock_context)
-    assert result["total"] == 2
+    assert result["count"] == 2
 
 
 async def test_message_get_tool(mock_context):
@@ -380,7 +485,7 @@ async def test_message_wait_receives_message(mock_context):
         tg.create_task(send_after_delay())
         result = await message_wait(r2["agent_id"], timeout=5, ctx=mock_context)
 
-    assert result["total"] >= 1
+    assert result["count"] >= 1
     assert result["waited"] is True
     assert result["messages"][0]["payload"] == "delayed hello"
 
@@ -394,7 +499,7 @@ async def test_message_wait_returns_immediately_if_pending(mock_context):
     await message_send(r1["agent_id"], r2["agent_id"], "hello", ctx=mock_context)
 
     result = await message_wait(r2["agent_id"], timeout=5, ctx=mock_context)
-    assert result["total"] >= 1
+    assert result["count"] >= 1
     assert result["waited"] is False
 
 
@@ -404,7 +509,7 @@ async def test_message_wait_timeout(mock_context):
     r = await agent_register("lonely", [], ctx=mock_context)
 
     result = await message_wait(r["agent_id"], timeout=1, ctx=mock_context)
-    assert result["total"] == 0
+    assert result["count"] == 0
     assert result["waited"] is False
 
 
@@ -453,6 +558,7 @@ async def test_message_send_with_client_msg_id(mock_context):
         msg_id="msg_clienttest123", ctx=mock_context,
     )
     assert result["msg_id"] == "msg_clienttest123"
+    assert result["status"] == "sent"
 
     retrieved = await message_get("msg_clienttest123", ctx=mock_context)
     assert retrieved["message"] is not None
@@ -476,7 +582,7 @@ async def test_message_broadcast_with_client_msg_id(mock_context):
         msg_id="msg_bcast_client456", ctx=mock_context,
     )
     assert result["msg_id"] == "msg_bcast_client456"
-    assert result["subscriber_count"] == 1
+    assert result["sent_to"] == 1
 
     polled = await message_poll(a2["agent_id"], ctx=mock_context)
-    assert polled["total"] >= 1
+    assert polled["count"] >= 1

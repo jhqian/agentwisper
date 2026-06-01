@@ -20,6 +20,39 @@ from persistence.message_store import MessageStore
 # create one Broker the first time it is needed and reuse it.
 _broker: Broker | None = None
 
+# ---------------------------------------------------------------------------
+# Lightweight message transformation (MCP boundary)
+# ---------------------------------------------------------------------------
+
+_PAYLOAD_THRESHOLD = 500
+_PREVIEW_LENGTH = 200
+
+
+def _lightweight_message(msg: dict) -> dict:
+    """Transform a full message record into a token-efficient format.
+
+    Short payloads (<=500 chars) are returned in full. Longer payloads
+    are truncated to a 200-char preview. Null optional fields are omitted.
+    """
+    result = {
+        "msg_id": msg["msg_id"],
+        "sender_id": msg.get("sender_id"),
+        "msg_type": msg.get("msg_type"),
+    }
+
+    payload = msg.get("payload", "")
+    if len(payload) <= _PAYLOAD_THRESHOLD:
+        result["payload"] = payload
+    else:
+        result["payload_preview"] = payload[:_PREVIEW_LENGTH] + "..."
+
+    for key in ("topic", "squad_id", "parent_msg_id"):
+        value = msg.get(key)
+        if value is not None:
+            result[key] = value
+
+    return result
+
 
 async def _get_or_create_broker() -> Broker:
     global _broker
@@ -51,31 +84,61 @@ def _get_broker(ctx: Context) -> Broker:
     return ctx.request_context.lifespan_context
 
 
+async def _try_restore_agent(broker: Broker, agent_id_or_name: str) -> str | None:
+    """Try to restore a disconnected agent and return its agent_id.
+
+    Returns agent_id if restored, None if agent not found or already active.
+    """
+    # Try by agent_id first
+    agent = await broker._registry.get_info(agent_id_or_name)
+    if agent is None:
+        # Try by name
+        agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
+    if agent is None:
+        return None
+    if agent["status"] != "disconnected":
+        return None
+    # Auto-reconnect
+    result = await broker.reconnect_agent(agent["name"])
+    return result["agent_id"]
+
+
 async def _resolve_agent(broker: Broker, agent_id_or_name: str) -> str:
     """Resolve agent_id or name to agent_id.
 
-    Raises ValueError if agent not found or is disconnected.
+    If the agent is disconnected, automatically restores it via reconnect.
+    Raises ValueError if agent not found.
     """
     resolved = await broker._registry.resolve_recipient(agent_id_or_name)
-    if resolved is None:
-        raise ValueError(
-            f"Agent '{agent_id_or_name}' not found or is disconnected"
-        )
-    return resolved
+    if resolved is not None:
+        return resolved
+    # Agent exists but may be disconnected — try auto-restore
+    restored = await _try_restore_agent(broker, agent_id_or_name)
+    if restored is not None:
+        return restored
+    raise ValueError(
+        f"Agent '{agent_id_or_name}' not found or is disconnected"
+    )
 
 
 async def _resolve_agent_any_status(broker: Broker, agent_id_or_name: str) -> str:
-    """Resolve agent_id or name, including disconnected agents.
+    """Resolve agent_id or name, auto-restoring disconnected agents.
 
     Raises ValueError if agent not found.
     """
     # Try by agent_id first
     agent = await broker._registry.get_info(agent_id_or_name)
     if agent is not None:
+        if agent["status"] == "disconnected":
+            result = await broker.reconnect_agent(agent["name"])
+            return result["agent_id"]
         return agent["agent_id"]
     # Try by name
     agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
     if agent is not None:
+        if agent["status"] == "disconnected":
+            result = await broker.reconnect_agent(agent["name"])
+            return result["agent_id"]
         return agent["agent_id"]
     raise ValueError(f"Agent '{agent_id_or_name}' not found")
 
@@ -300,7 +363,8 @@ async def message_send(
     """Send a P2P or RPC message. sender_id and recipient accept agent_id or name."""
     broker = _get_broker(ctx)
     sender_id = await _resolve_agent(broker, sender_id)
-    return await broker.send_message(sender_id, recipient, payload, msg_type, squad_id, msg_id=msg_id)
+    result = await broker.send_message(sender_id, recipient, payload, msg_type, squad_id, msg_id=msg_id)
+    return {"msg_id": result["msg_id"], "status": "sent"}
 
 
 @mcp.tool()
@@ -315,7 +379,8 @@ async def message_broadcast(
     """Publish to topic subscribers. sender_id accepts agent_id or name."""
     broker = _get_broker(ctx)
     sender_id = await _resolve_agent(broker, sender_id)
-    return await broker.broadcast_message(sender_id, topic, payload, squad_id, msg_id=msg_id)
+    result = await broker.broadcast_message(sender_id, topic, payload, squad_id, msg_id=msg_id)
+    return {"msg_id": result["msg_id"], "sent_to": result["subscriber_count"]}
 
 
 
@@ -336,8 +401,8 @@ async def message_poll(
     broker = _get_broker(ctx)
     agent_id = await _resolve_agent(broker, agent_id)
     result = await broker.poll_messages(agent_id, limit, unread_only)
-    msgs = result.get("messages", [])
-    return {"messages": msgs, "total": len(msgs)}
+    msgs = [_lightweight_message(m) for m in result.get("messages", [])]
+    return {"messages": msgs, "count": len(msgs)}
 
 
 @mcp.tool()
@@ -360,12 +425,12 @@ async def message_wait(
     agent_id = await _resolve_agent(broker, agent_id)
 
     result = await broker.poll_messages(agent_id, limit, unread_only=True)
-    msgs = result.get("messages", [])
+    msgs = [_lightweight_message(m) for m in result.get("messages", [])]
     if msgs:
-        return {"messages": msgs, "total": len(msgs), "waited": False}
+        return {"messages": msgs, "count": len(msgs), "waited": False}
 
     if timeout <= 0:
-        return {"messages": [], "total": 0, "waited": False}
+        return {"messages": [], "count": 0, "waited": False}
 
     event = broker.register_wait(agent_id)
     try:
@@ -378,8 +443,8 @@ async def message_wait(
         broker.unregister_wait(agent_id)
 
     result = await broker.poll_messages(agent_id, limit, unread_only=True)
-    msgs = result.get("messages", [])
-    return {"messages": msgs, "total": len(msgs), "waited": waited}
+    msgs = [_lightweight_message(m) for m in result.get("messages", [])]
+    return {"messages": msgs, "count": len(msgs), "waited": waited}
 
 
 @mcp.tool()
@@ -405,7 +470,8 @@ async def message_query(
         time_end=time_end,
         limit=limit,
     )
-    return {"messages": messages, "total": len(messages)}
+    msgs = [_lightweight_message(m) for m in messages]
+    return {"messages": msgs, "count": len(msgs)}
 
 
 @mcp.tool()

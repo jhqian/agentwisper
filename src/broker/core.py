@@ -15,7 +15,7 @@ from broker.router import MessageRouter
 from broker.squad_manager import SquadManager
 from broker.team_manager import TeamManager
 from common.config import BrokerConfig
-from common.types import MessageType
+from common.types import AgentStatus, MessageType
 from persistence.database import AsyncDatabase
 from persistence.subscription_store import SubscriptionStore
 
@@ -106,6 +106,19 @@ class Broker:
     def unregister_wait(self, agent_id: str) -> None:
         """Remove wait event after message_wait completes."""
         self._wait_events.pop(agent_id, None)
+
+    async def _try_restore_by_name_or_id(self, identifier: str) -> None:
+        """Auto-restore a disconnected agent when referenced by ID or name."""
+        agent = await self._registry.get_info(identifier)
+        if agent is None:
+            agent = await self._registry._agent_store.get_by_name(identifier)
+        if agent is not None and agent["status"] == "disconnected":
+            await self._registry._agent_store.update_status(
+                agent["agent_id"], AgentStatus.ACTIVE
+            )
+            logger.info(
+                "Auto-restored agent: %s (%s)", agent["name"], agent["agent_id"],
+            )
 
     # ------------------------------------------------------------------
     # Agent operations  (delegates to AgentRegistry)
@@ -267,6 +280,7 @@ class Broker:
         squad_id: str | None = None,
         msg_id: str | None = None,
     ) -> dict:
+        await self._try_restore_by_name_or_id(recipient)
         result = await self._router.send_message(
             sender_id, recipient, payload, MessageType(msg_type), squad_id,
             msg_id=msg_id,

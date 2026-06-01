@@ -96,20 +96,27 @@ async def check_agent_state_transitions(
         str(dereg_res),
     )
 
-    # Verify c is disconnected
+    # agent_info auto-restores disconnected agents
     info_c = await call_tool(session, "agent_info", {"agent_id": c})
     report(
-        "state: gamma is disconnected",
-        info_c is not None and info_c.get("status") == "disconnected",
+        "state: gamma auto-restored to active",
+        info_c is not None and info_c.get("status") == "active",
         str(info_c.get("status") if info_c else None),
     )
 
-    # Reconnect c by name
+    # Reconnect requires disconnected state, so deregister again first
+    dereg2 = await call_tool(session, "agent_deregister", {"agent_id": c})
+    report(
+        "state: re-deregister gamma for reconnect",
+        dereg2.get("status") == "disconnected",
+        str(dereg2),
+    )
+
     reconnect_res = await call_tool(
         session, "agent_reconnect", {"name": "sys-gamma", "session_name": "sess_new"},
     )
     report(
-        "state: reconnect gamma",
+        "state: reconnect gamma after re-deregister",
         reconnect_res.get("status") == "active" and reconnect_res.get("agent_id") == c,
         str(reconnect_res),
     )
@@ -1015,7 +1022,7 @@ async def run_tests() -> None:
                     )
                     report(
                         f"deregister {label}",
-                        d.get("status") in ("deregistered", "ok"),
+                        d.get("status") in ("deregistered", "ok", "disconnected"),
                         str(d),
                     )
 
