@@ -107,14 +107,16 @@ async def _resolve_agent(broker: Broker, agent_id_or_name: str) -> str:
     """Resolve agent_id or name to agent_id.
 
     If the agent is disconnected, automatically restores it via reconnect.
-    Raises ValueError if agent not found.
+    Updates last_seen on success. Raises ValueError if agent not found.
     """
     resolved = await broker._registry.resolve_recipient(agent_id_or_name)
     if resolved is not None:
+        await broker._registry._agent_store.update_last_seen(resolved)
         return resolved
     # Agent exists but may be disconnected — try auto-restore
     restored = await _try_restore_agent(broker, agent_id_or_name)
     if restored is not None:
+        await broker._registry._agent_store.update_last_seen(restored)
         return restored
     raise ValueError(
         f"Agent '{agent_id_or_name}' not found or is disconnected"
@@ -124,21 +126,25 @@ async def _resolve_agent(broker: Broker, agent_id_or_name: str) -> str:
 async def _resolve_agent_any_status(broker: Broker, agent_id_or_name: str) -> str:
     """Resolve agent_id or name, auto-restoring disconnected agents.
 
-    Raises ValueError if agent not found.
+    Updates last_seen on success. Raises ValueError if agent not found.
     """
     # Try by agent_id first
     agent = await broker._registry.get_info(agent_id_or_name)
     if agent is not None:
         if agent["status"] == "disconnected":
             result = await broker.reconnect_agent(agent["name"])
+            await broker._registry._agent_store.update_last_seen(result["agent_id"])
             return result["agent_id"]
+        await broker._registry._agent_store.update_last_seen(agent["agent_id"])
         return agent["agent_id"]
     # Try by name
     agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
     if agent is not None:
         if agent["status"] == "disconnected":
             result = await broker.reconnect_agent(agent["name"])
+            await broker._registry._agent_store.update_last_seen(result["agent_id"])
             return result["agent_id"]
+        await broker._registry._agent_store.update_last_seen(agent["agent_id"])
         return agent["agent_id"]
     raise ValueError(f"Agent '{agent_id_or_name}' not found")
 
@@ -200,8 +206,9 @@ async def agent_reconnect(
     session_name: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
-    """Reconnect a previously disconnected agent by name.
+    """Reconnect an agent by exact name match.
 
+    Works regardless of current status (active or disconnected).
     Restores the agent to active status with its original agent_id.
     All squad memberships, subscriptions, and buffered messages are preserved.
     """

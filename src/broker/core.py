@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 import anyio
+import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from broker.agent_registry import AgentRegistry
@@ -40,6 +41,7 @@ class Broker:
         self._sub_store = SubscriptionStore(self._db)
         self._wait_events: dict[str, anyio.Event] = {}
         self._started = False
+        self._liveness_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -51,12 +53,16 @@ class Broker:
             return
         await self._db.initialize()
         await self._reset_active_agents_on_startup()
+        self._start_liveness_monitor()
         self._started = True
 
     async def stop(self) -> None:
         """Stop background services and close database."""
         if not self._started:
             return
+        if self._liveness_task is not None:
+            self._liveness_task.cancel()
+            self._liveness_task = None
         await self._db.close()
         self._started = False
 
@@ -82,6 +88,40 @@ class Broker:
         logger.info(
             "Broker startup: reset %d agent(s) to disconnected", len(affected)
         )
+
+    def _start_liveness_monitor(self) -> None:
+        """Start background task that marks inactive agents as disconnected."""
+
+        async def _monitor_loop() -> None:
+            timeout_secs = self._config.liveness_timeout
+            interval_secs = self._config.liveness_interval
+            while True:
+                await asyncio.sleep(interval_secs)
+                now = datetime.now(timezone.utc)
+                cutoff = now - timedelta(seconds=timeout_secs)
+                cutoff_iso = cutoff.isoformat()
+                stale = await self._db.execute_fetchall(
+                    "SELECT agent_id, name FROM agents WHERE status = 'active' AND last_seen < ?",
+                    (cutoff_iso,),
+                )
+                if stale:
+                    ids = [row["agent_id"] for row in stale]
+                    placeholders = ",".join("?" * len(ids))
+                    now_iso = now.isoformat()
+                    await self._db.execute(
+                        f"UPDATE agents SET status = 'disconnected', "
+                        f"disconnected_at = ?, session_name = NULL "
+                        f"WHERE agent_id IN ({placeholders}) AND last_seen < ?",
+                        (now_iso, *ids, cutoff_iso),
+                    )
+                    for agent_id in ids:
+                        self.unregister_wait(agent_id)
+                    logger.info(
+                        "Liveness: %d agent(s) marked disconnected (inactive > %ds)",
+                        len(stale), timeout_secs,
+                    )
+
+        self._liveness_task = asyncio.create_task(_monitor_loop())
 
     # ------------------------------------------------------------------
     # Notification dispatch
@@ -115,6 +155,9 @@ class Broker:
         if agent is not None and agent["status"] == "disconnected":
             await self._registry._agent_store.update_status(
                 agent["agent_id"], AgentStatus.ACTIVE
+            )
+            await self._registry._agent_store.update_last_seen(
+                agent["agent_id"]
             )
             logger.info(
                 "Auto-restored agent: %s (%s)", agent["name"], agent["agent_id"],

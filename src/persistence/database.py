@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS agents (
     squad_id TEXT,
     current_team_id TEXT,
     created_at TEXT NOT NULL,
-    last_heartbeat TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
     session_name TEXT,
     metadata TEXT NOT NULL DEFAULT '{}',
     disconnected_at TEXT
@@ -117,6 +117,10 @@ MIGRATIONS = [
     # Migration 2: add disconnected_at column for TTL cleanup
     """
     ALTER TABLE agents ADD COLUMN disconnected_at TEXT;
+    """,
+    # Migration 3: rename last_heartbeat to last_seen
+    """
+    ALTER TABLE agents RENAME COLUMN last_heartbeat TO last_seen;
     """,
 ]
 
