@@ -177,10 +177,14 @@ async def test_reconnect_nonexistent_raises(registry):
         await registry.reconnect(name="nonexistent", session_name="sess_1")
 
 
-async def test_reconnect_active_agent_raises(registry):
-    await registry.register(name="dev", capabilities=[])
-    with pytest.raises(ValueError, match="status 'active'"):
-        await registry.reconnect(name="dev", session_name="sess_1")
+async def test_reconnect_active_agent_succeeds(registry):
+    r = await registry.register(name="dev", capabilities=[])
+    agent_id = r["agent_id"]
+    result = await registry.reconnect(name="dev", session_name="sess_new")
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "active"
+    info = await registry.get_info(agent_id)
+    assert info["session_name"] == "sess_new"
 
 
 async def test_reconnect_preserves_capabilities(registry):
@@ -193,10 +197,12 @@ async def test_reconnect_preserves_capabilities(registry):
     assert info["capabilities"] == '["code", "review"]'
 
 
-async def test_reconnect_active_agent_error_mentions_status(registry):
-    await registry.register(name="dev", capabilities=[])
-    with pytest.raises(ValueError, match="status 'active'"):
-        await registry.reconnect(name="dev")
+async def test_reconnect_active_agent_no_error(registry):
+    r = await registry.register(name="dev", capabilities=[])
+    agent_id = r["agent_id"]
+    result = await registry.reconnect(name="dev")
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "active"
 
 
 async def test_reconnect_never_registered_error_suggests_cause(registry):

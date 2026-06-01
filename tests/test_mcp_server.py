@@ -108,6 +108,18 @@ async def test_agent_reconnect_not_found(mock_context):
         await agent_reconnect("nonexistent", session_name="sess_1", ctx=mock_context)
 
 
+async def test_agent_reconnect_while_active(mock_context):
+    from mcp_server.server import agent_register, agent_reconnect, agent_info
+
+    reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
+    # Reconnect without deregistering — agent is still active
+    result = await agent_reconnect("dev", session_name="sess_new", ctx=mock_context)
+    assert result["status"] == "active"
+    assert result["agent_id"] == reg["agent_id"]
+    info = await agent_info(reg["agent_id"], ctx=mock_context)
+    assert info["session_name"] == "sess_new"
+
+
 # ---------------------------------------------------------------------------
 # Unified agent-not-found errors
 # ---------------------------------------------------------------------------

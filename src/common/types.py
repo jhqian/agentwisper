@@ -41,7 +41,7 @@ class AgentRecord:
     squad_id: str | None
     current_team_id: str | None
     created_at: str
-    last_heartbeat: str  # retained for DB compat, no longer actively used
+    last_seen: str
     session_name: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 

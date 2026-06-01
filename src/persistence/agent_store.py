@@ -39,7 +39,7 @@ class AgentStore:
         agent_id = _generate_agent_id()
         now = _now_iso()
         await self._db.execute(
-            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, session_name, metadata) "
+            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen, session_name, metadata) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 agent_id,
@@ -92,6 +92,13 @@ class AgentStore:
         await self._db.execute(
             "UPDATE agents SET session_name = ? WHERE agent_id = ?",
             (session_name, agent_id),
+        )
+
+    async def update_last_seen(self, agent_id: str) -> None:
+        """Update agent last_seen timestamp to now."""
+        await self._db.execute(
+            "UPDATE agents SET last_seen = ? WHERE agent_id = ?",
+            (_now_iso(), agent_id),
         )
 
     async def get_disconnected_by_name(self, name: str) -> dict[str, Any] | None:

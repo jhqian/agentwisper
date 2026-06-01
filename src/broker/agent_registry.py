@@ -61,25 +61,21 @@ class AgentRegistry:
         await self._agent_store.update_session_name(agent_id, None)
 
     async def reconnect(self, name: str, session_name: str | None = None) -> dict[str, Any]:
-        """Reconnect a disconnected agent by name.
+        """Reconnect an agent by exact name match.
 
-        Restores agent to active status with same agent_id.
+        Works regardless of current status (active or disconnected).
+        Restores agent to active status with original agent_id.
         Returns agent_id, assigned_name, status, and buffered_count.
         """
-        agent = await self._agent_store.get_disconnected_by_name(name)
+        agent = await self._agent_store.get_by_name(name)
         if agent is None:
-            existing = await self._agent_store.get_by_name(name)
-            if existing is not None:
-                raise ValueError(
-                    f"Agent '{name}' exists with status '{existing['status']}', "
-                    f"not 'disconnected'. Only disconnected agents can reconnect."
-                )
             raise ValueError(
                 f"No agent named '{name}' found. It may have never been registered "
                 f"or may have expired after the retention period."
             )
         agent_id = agent["agent_id"]
         await self._agent_store.update_status(agent_id, AgentStatus.ACTIVE)
+        await self._agent_store.update_last_seen(agent_id)
         if session_name:
             await self._agent_store.update_session_name(agent_id, session_name)
         buffered = await self._message_store.get_pending_for_agent(agent_id)

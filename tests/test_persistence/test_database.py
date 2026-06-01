@@ -32,7 +32,7 @@ async def test_database_wal_mode(db):
 
 async def test_database_execute(db):
     await db.execute(
-        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat) "
+        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         ("agent_test", "test", "active", "[]", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z")
     )
@@ -43,7 +43,7 @@ async def test_database_execute(db):
 
 async def test_session_name_column_exists(db):
     await db.execute(
-        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat, session_name) "
+        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen, session_name) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         ("agent_sn", "sn-test", "active", "[]", "2026-01-01", "2026-01-01", "session_123"),
     )
@@ -53,13 +53,13 @@ async def test_session_name_column_exists(db):
 
 async def test_unique_name_constraint(db):
     await db.execute(
-        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat) "
+        "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         ("agent_1", "dev", "active", "[]", "2026-01-01", "2026-01-01"),
     )
     with pytest.raises(Exception):
         await db.execute(
-            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_heartbeat) "
+            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen) "
             "VALUES (?, ?, ?, ?, ?, ?)",
             ("agent_2", "dev", "active", "[]", "2026-01-01", "2026-01-01"),
         )
