@@ -8,6 +8,7 @@ from __future__ import annotations
 import anyio
 import asyncio
 import logging
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -21,6 +22,21 @@ from persistence.database import AsyncDatabase
 from persistence.subscription_store import SubscriptionStore
 
 logger = logging.getLogger(__name__)
+
+# ANSI color helpers for terminal output
+_CYAN = "\033[36m" if sys.stderr.isatty() else ""
+_DIM = "\033[2m" if sys.stderr.isatty() else ""
+_RESET = "\033[0m" if sys.stderr.isatty() else ""
+
+
+def _hl(text: str) -> str:
+    """Highlight payload text for terminal display."""
+    return f"{_CYAN}{text}{_RESET}"
+
+
+def _dim(text: str) -> str:
+    """Dim secondary text for terminal display."""
+    return f"{_DIM}{text}{_RESET}"
 
 
 class Broker:
@@ -201,11 +217,12 @@ class Broker:
         agent_name = agent_info.get("name", "?") if agent_info else "?"
         if agent_info and agent_info.get("squad_id"):
             squad_id = agent_info["squad_id"]
+            # Re-check role to prevent TOCTOU: leadership may have
+            # transferred between the initial read and now.
             role = await self._squad_mgr._squad_store.get_member_role(
                 squad_id, agent_id
             )
             if role == "leader":
-                # Clear squad_id for all members, then mark squad dissolved
                 members = await self._squad_mgr._squad_store.get_members(squad_id)
                 for member in members:
                     if member["agent_id"] != agent_id:
@@ -342,9 +359,9 @@ class Broker:
         sender_label = await self._agent_label(sender_id)
         recipient_label = await self._agent_label(recipient_id)
         logger.info(
-            "Message sent: %s -> %s type=%s msg_id=%s payload=%.120s",
+            "Message sent: %s -> %s type=%s msg_id=%s %s",
             sender_label, recipient_label, msg_type, result.get("msg_id"),
-            payload,
+            _hl(payload[:120]),
         )
         return result
 
@@ -363,9 +380,9 @@ class Broker:
         if subscriber_ids:
             await self._notify_recipients(subscriber_ids)
         logger.info(
-            "Broadcast: %s -> topic=%s subscribers=%d squad=%s msg_id=%s payload=%.120s",
+            "Broadcast: %s -> topic=%s subscribers=%d squad=%s msg_id=%s %s",
             await self._agent_label(sender_id), topic, len(subscriber_ids), squad_id,
-            result.get("msg_id"), payload,
+            result.get("msg_id"), _hl(payload[:120]),
         )
         return result
 
