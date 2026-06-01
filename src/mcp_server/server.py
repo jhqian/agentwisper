@@ -551,6 +551,9 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
         format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    # Suppress noisy per-request logs from transport and framework layers.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("mcp.server").setLevel(logging.WARNING)
 
     mcp.settings.port = port
     mcp.settings.host = host
