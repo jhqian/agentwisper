@@ -129,6 +129,7 @@ class AsyncDatabase:
     def __init__(self, db_path: str) -> None:
         self._db_path = db_path
         self._loop: asyncio.AbstractEventLoop = None  # type: ignore[assignment]
+        self._write_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -136,7 +137,7 @@ class AsyncDatabase:
         await self._run_in_thread(self._init_db)
 
     def _init_db(self) -> None:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.executescript(SCHEMA_SQL)
@@ -156,7 +157,8 @@ class AsyncDatabase:
         pass
 
     async def execute(self, sql: str, params: tuple[Any, ...] = ()) -> None:
-        await self._run_in_thread(self._execute, sql, params)
+        async with self._write_lock:
+            await self._run_in_thread(self._execute, sql, params)
 
     async def execute_fetchall(
         self, sql: str, params: tuple[Any, ...] = ()
@@ -172,17 +174,18 @@ class AsyncDatabase:
     async def execute_many(
         self, sql: str, params_list: list[tuple[Any, ...]]
     ) -> None:
-        await self._run_in_thread(self._execute_many, sql, params_list)
+        async with self._write_lock:
+            await self._run_in_thread(self._execute_many, sql, params_list)
 
     def _execute(self, sql: str, params: tuple[Any, ...]) -> None:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute(sql, params)
         conn.commit()
         conn.close()
 
     def _fetchall(self, sql: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(sql, params)
@@ -193,7 +196,7 @@ class AsyncDatabase:
     def _execute_many(
         self, sql: str, params_list: list[tuple[Any, ...]]
     ) -> None:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         conn.execute("PRAGMA foreign_keys=ON")
         conn.executemany(sql, params_list)
         conn.commit()
