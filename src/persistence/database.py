@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
 import asyncio
+
+logger = logging.getLogger(__name__)
+
+_WRITE_RETRY_ATTEMPTS = 3
+_WRITE_RETRY_DELAY_S = 0.1
 
 
 SCHEMA_SQL = """
@@ -178,11 +185,28 @@ class AsyncDatabase:
             await self._run_in_thread(self._execute_many, sql, params_list)
 
     def _execute(self, sql: str, params: tuple[Any, ...]) -> None:
-        conn = sqlite3.connect(self._db_path, timeout=30)
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute(sql, params)
-        conn.commit()
-        conn.close()
+        conn = None
+        for attempt in range(1, _WRITE_RETRY_ATTEMPTS + 1):
+            try:
+                conn = sqlite3.connect(self._db_path, timeout=30)
+                conn.execute("PRAGMA foreign_keys=ON")
+                conn.execute(sql, params)
+                conn.commit()
+                conn.close()
+                conn = None
+                return
+            except sqlite3.OperationalError as e:
+                if conn:
+                    conn.close()
+                    conn = None
+                if "locked" in str(e).lower() and attempt < _WRITE_RETRY_ATTEMPTS:
+                    logger.debug(
+                        "DB write locked (attempt %d/%d), retrying: %s",
+                        attempt, _WRITE_RETRY_ATTEMPTS, e,
+                    )
+                    time.sleep(_WRITE_RETRY_DELAY_S * attempt)
+                    continue
+                raise
 
     def _fetchall(self, sql: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         conn = sqlite3.connect(self._db_path, timeout=30)
@@ -196,11 +220,28 @@ class AsyncDatabase:
     def _execute_many(
         self, sql: str, params_list: list[tuple[Any, ...]]
     ) -> None:
-        conn = sqlite3.connect(self._db_path, timeout=30)
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.executemany(sql, params_list)
-        conn.commit()
-        conn.close()
+        conn = None
+        for attempt in range(1, _WRITE_RETRY_ATTEMPTS + 1):
+            try:
+                conn = sqlite3.connect(self._db_path, timeout=30)
+                conn.execute("PRAGMA foreign_keys=ON")
+                conn.executemany(sql, params_list)
+                conn.commit()
+                conn.close()
+                conn = None
+                return
+            except sqlite3.OperationalError as e:
+                if conn:
+                    conn.close()
+                    conn = None
+                if "locked" in str(e).lower() and attempt < _WRITE_RETRY_ATTEMPTS:
+                    logger.debug(
+                        "DB batch write locked (attempt %d/%d), retrying: %s",
+                        attempt, _WRITE_RETRY_ATTEMPTS, e,
+                    )
+                    time.sleep(_WRITE_RETRY_DELAY_S * attempt)
+                    continue
+                raise
 
     async def _run_in_thread(self, fn, *args):
         return await self._loop.run_in_executor(None, fn, *args)
