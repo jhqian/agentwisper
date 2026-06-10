@@ -17,8 +17,7 @@ class BrokerConfig:
     http_host: str = "127.0.0.1"
     disconnected_ttl_days: int = 7
     cleanup_interval_minutes: int = 60
-    liveness_interval: int = 30
-    liveness_timeout: int = 90
+    message_buffer_limit: int = 100
 
 
 def load_config() -> BrokerConfig:
@@ -31,6 +30,5 @@ def load_config() -> BrokerConfig:
         http_host=os.environ.get("AGENTSQUAD_HTTP_HOST", BrokerConfig.http_host),
         disconnected_ttl_days=int(os.environ.get("AGENTSQUAD_DISCONNECTED_TTL_DAYS", "7")),
         cleanup_interval_minutes=int(os.environ.get("AGENTSQUAD_CLEANUP_INTERVAL_MINUTES", "60")),
-        liveness_interval=int(os.environ.get("AGENTSQUAD_LIVENESS_INTERVAL", "30")),
-        liveness_timeout=int(os.environ.get("AGENTSQUAD_LIVENESS_TIMEOUT", "90")),
+        message_buffer_limit=int(os.environ.get("AGENTSQUAD_MESSAGE_BUFFER_LIMIT", "100")),
     )

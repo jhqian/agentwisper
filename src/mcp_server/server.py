@@ -84,66 +84,47 @@ def _get_broker(ctx: Context) -> Broker:
     return ctx.request_context.lifespan_context
 
 
-async def _try_restore_agent(broker: Broker, agent_id_or_name: str) -> str | None:
-    """Try to restore a disconnected agent and return its agent_id.
-
-    Returns agent_id if restored, None if agent not found or already active.
-    """
-    # Try by agent_id first
-    agent = await broker._registry.get_info(agent_id_or_name)
-    if agent is None:
-        # Try by name
-        agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
-    if agent is None:
-        return None
-    if agent["status"] != "disconnected":
-        return None
-    # Auto-reconnect
-    result = await broker.reconnect_agent(agent["name"])
-    return result["agent_id"]
-
-
-async def _resolve_agent(broker: Broker, agent_id_or_name: str) -> str:
+async def _resolve_agent(
+    broker: Broker, agent_id_or_name: str, session_name: str | None = None
+) -> str:
     """Resolve agent_id or name to agent_id.
 
-    If the agent is disconnected, automatically restores it via reconnect.
-    Updates last_seen on success. Raises ValueError if agent not found.
+    If session_name is provided, verifies the agent's session_name matches.
+    Raises ValueError on mismatch (session invalidated by takeover).
+    Raises ValueError if agent not found or is disconnected.
     """
     resolved = await broker._registry.resolve_recipient(agent_id_or_name)
     if resolved is not None:
+        if session_name is not None:
+            agent = await broker._registry.get_info(resolved)
+            if (agent
+                    and agent.get("session_name") is not None
+                    and agent["session_name"] != session_name):
+                raise ValueError(
+                    "Session invalidated (agent taken over). Re-register with "
+                    "/agentsquad:register or /agentsquad:reconnect"
+                )
         await broker._registry._agent_store.update_last_seen(resolved)
         return resolved
-    # Agent exists but may be disconnected — try auto-restore
-    restored = await _try_restore_agent(broker, agent_id_or_name)
-    if restored is not None:
-        await broker._registry._agent_store.update_last_seen(restored)
-        return restored
     raise ValueError(
-        f"Agent '{agent_id_or_name}' not found or is disconnected"
+        f"Agent '{agent_id_or_name}' not found"
     )
 
 
 async def _resolve_agent_any_status(broker: Broker, agent_id_or_name: str) -> str:
-    """Resolve agent_id or name, auto-restoring disconnected agents.
+    """Resolve agent_id or name without status filtering.
 
-    Updates last_seen on success. Raises ValueError if agent not found.
+    Does NOT auto-restore disconnected agents. Returns agent_id as-is.
+    Raises ValueError if agent not found.
     """
     # Try by agent_id first
     agent = await broker._registry.get_info(agent_id_or_name)
     if agent is not None:
-        if agent["status"] == "disconnected":
-            result = await broker.reconnect_agent(agent["name"])
-            await broker._registry._agent_store.update_last_seen(result["agent_id"])
-            return result["agent_id"]
         await broker._registry._agent_store.update_last_seen(agent["agent_id"])
         return agent["agent_id"]
     # Try by name
     agent = await broker._registry._agent_store.get_by_name(agent_id_or_name)
     if agent is not None:
-        if agent["status"] == "disconnected":
-            result = await broker.reconnect_agent(agent["name"])
-            await broker._registry._agent_store.update_last_seen(result["agent_id"])
-            return result["agent_id"]
         await broker._registry._agent_store.update_last_seen(agent["agent_id"])
         return agent["agent_id"]
     raise ValueError(f"Agent '{agent_id_or_name}' not found")
@@ -162,16 +143,17 @@ async def agent_register(
     capabilities: list[str],
     metadata: dict[str, Any] | None = None,
     session_name: str | None = None,
+    force: bool = False,
     ctx: Context | None = None,
 ) -> dict:
     """Register a new agent.
 
-    If the requested name is already taken by an active agent,
-    a numeric suffix is appended (e.g. "dev" -> "dev-1").
+    Rejects if the name is already registered unless force=True.
+    Use agent_reconnect to resume an existing agent session.
     Returns agent_id, assigned_name, and status.
     """
     broker = _get_broker(ctx)
-    return await broker.register_agent(name, capabilities, metadata, session_name=session_name)
+    return await broker.register_agent(name, capabilities, metadata, session_name=session_name, force=force)
 
 
 @mcp.tool()
@@ -203,17 +185,20 @@ async def agent_list(squad_id: str | None = None, ctx: Context | None = None) ->
 @mcp.tool()
 async def agent_reconnect(
     name: str,
+    agent_id: str | None = None,
     session_name: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
-    """Reconnect an agent by exact name match.
+    """Reconnect an agent by name with optional credential verification.
 
-    Works regardless of current status (active or disconnected).
+    When agent_id is provided, verifies the name+agent_id pair before
+    force-takeover. When agent_id is omitted, falls back to name-only
+    lookup (legacy mode).
     Restores the agent to active status with its original agent_id.
     All squad memberships, subscriptions, and buffered messages are preserved.
     """
     broker = _get_broker(ctx)
-    return await broker.reconnect_agent(name, session_name=session_name)
+    return await broker.reconnect_agent(name, agent_id=agent_id, session_name=session_name)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +356,11 @@ async def message_send(
     broker = _get_broker(ctx)
     sender_id = await _resolve_agent(broker, sender_id)
     result = await broker.send_message(sender_id, recipient, payload, msg_type, squad_id, msg_id=msg_id)
-    return {"msg_id": result["msg_id"], "status": "sent"}
+    recipient_id = result.get("recipient_id", recipient)
+    # Check if recipient is disconnected (message is buffered, not immediately delivered)
+    recipient_info = await broker._registry.get_info(recipient_id)
+    buffered = recipient_info is not None and recipient_info.get("status") == "disconnected"
+    return {"msg_id": result["msg_id"], "status": "sent", "recipient_id": recipient_id, "buffered": buffered}
 
 
 @mcp.tool()
@@ -546,6 +535,8 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     """Run the MCP server with streamable-http transport."""
     import logging
 
+    from common.version import get_version
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
@@ -553,6 +544,9 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     )
     # Keep broker business logs at INFO; suppress transport/framework noise.
     logging.getLogger("mcp").setLevel(logging.WARNING)
+
+    logger = logging.getLogger(__name__)
+    logger.info("agentsquad broker %s starting on %s:%d", get_version(), host, port)
 
     mcp.settings.port = port
     mcp.settings.host = host

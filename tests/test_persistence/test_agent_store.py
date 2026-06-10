@@ -134,41 +134,6 @@ async def test_list_agents_by_squad(store):
     assert agents[0]["agent_id"] == a1
 
 
-async def test_find_names_by_prefix_exact(store):
-    await store.create(name="dev", capabilities=[])
-    names = await store.find_names_by_prefix("dev")
-    assert names == ["dev"]
-
-
-async def test_find_names_by_prefix_with_suffixes(store):
-    await store.create(name="dev", capabilities=[])
-    await store.create(name="dev-1", capabilities=[])
-    await store.create(name="dev-2", capabilities=[])
-    names = await store.find_names_by_prefix("dev")
-    assert sorted(names) == ["dev", "dev-1", "dev-2"]
-
-
-async def test_find_names_by_prefix_no_match(store):
-    await store.create(name="test", capabilities=[])
-    names = await store.find_names_by_prefix("dev")
-    assert names == []
-
-
-async def test_find_names_by_prefix_does_not_overmatch(store):
-    """LIKE 'dev-%' matches 'dev-team' but that name is returned too."""
-    await store.create(name="dev", capabilities=[])
-    await store.create(name="dev-team", capabilities=[])
-    names = await store.find_names_by_prefix("dev")
-    assert sorted(names) == ["dev", "dev-team"]
-
-
-async def test_find_names_excludes_disconnected(store):
-    agent_id = await store.create(name="dev", capabilities=[])
-    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
-    names = await store.find_names_by_prefix("dev")
-    assert names == []
-
-
 async def test_update_status_sets_disconnected_at(store):
     agent_id = await store.create(name="test", capabilities=["code"])
     await store.update_status(agent_id, AgentStatus.DISCONNECTED)
@@ -224,3 +189,33 @@ async def test_cleanup_cascades_to_messages(store, db):
     assert removed == 1
     msgs = await db.execute_fetchall("SELECT * FROM messages WHERE recipient_id = ?", (agent_id,))
     assert len(msgs) == 0
+
+
+async def test_update_status_and_session_credential_match(store):
+    agent_id = await store.create("dev", ["code"], session_name="old_sess")
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    rows = await store.update_status_and_session(
+        agent_id, "dev", AgentStatus.ACTIVE, "new_sess"
+    )
+    assert rows == 1
+    agent = await store.get(agent_id)
+    assert agent["status"] == "active"
+    assert agent["session_name"] == "new_sess"
+    assert agent["disconnected_at"] is None
+
+
+async def test_update_status_and_session_wrong_name(store):
+    agent_id = await store.create("dev", ["code"])
+    await store.update_status(agent_id, AgentStatus.DISCONNECTED)
+    rows = await store.update_status_and_session(
+        agent_id, "wrong-name", AgentStatus.ACTIVE, "new_sess"
+    )
+    assert rows == 0
+
+
+async def test_update_status_and_session_wrong_id(store):
+    await store.create("dev", ["code"])
+    rows = await store.update_status_and_session(
+        "agent_nonexistent", "dev", AgentStatus.ACTIVE, "new_sess"
+    )
+    assert rows == 0

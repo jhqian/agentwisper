@@ -105,7 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_delivery_msg ON delivery_logs(msg_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_recipient ON delivery_logs(recipient_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_status ON delivery_logs(status);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name_unique ON agents(name) WHERE status != 'disconnected';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
 CREATE INDEX IF NOT EXISTS idx_agents_squad ON agents(squad_id);
 CREATE INDEX IF NOT EXISTS idx_agents_team ON agents(current_team_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_agent ON subscriptions(agent_id);
@@ -128,6 +128,36 @@ MIGRATIONS = [
     # Migration 3: rename last_heartbeat to last_seen
     """
     ALTER TABLE agents RENAME COLUMN last_heartbeat TO last_seen;
+    """,
+    # Migration 4: enforce full name uniqueness (including disconnected)
+    """
+    DROP INDEX IF EXISTS idx_agents_name_unique;
+    DELETE FROM delivery_logs WHERE recipient_id IN (
+        SELECT a.agent_id FROM agents a
+        INNER JOIN agents b ON a.name = b.name
+            AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
+    );
+    DELETE FROM subscriptions WHERE agent_id IN (
+        SELECT a.agent_id FROM agents a
+        INNER JOIN agents b ON a.name = b.name
+            AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
+    );
+    DELETE FROM squad_memberships WHERE agent_id IN (
+        SELECT a.agent_id FROM agents a
+        INNER JOIN agents b ON a.name = b.name
+            AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
+    );
+    DELETE FROM team_memberships WHERE agent_id IN (
+        SELECT a.agent_id FROM agents a
+        INNER JOIN agents b ON a.name = b.name
+            AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
+    );
+    DELETE FROM agents WHERE agent_id IN (
+        SELECT a.agent_id FROM agents a
+        INNER JOIN agents b ON a.name = b.name
+            AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
     """,
 ]
 

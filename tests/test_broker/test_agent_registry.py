@@ -59,18 +59,18 @@ async def test_resolve_nonexistent(registry):
     assert resolved is None
 
 
-async def test_resolve_disconnected_by_id_returns_none(registry):
+async def test_resolve_disconnected_by_id_returns_id(registry):
     result = await registry.register(name="test", capabilities=[])
     await registry.deregister(result["agent_id"])
     resolved = await registry.resolve_recipient(result["agent_id"])
-    assert resolved is None
+    assert resolved == result["agent_id"]
 
 
-async def test_resolve_disconnected_by_name_returns_none(registry):
+async def test_resolve_disconnected_by_name_returns_id(registry):
     result = await registry.register(name="test", capabilities=[])
     await registry.deregister(result["agent_id"])
     resolved = await registry.resolve_recipient("test")
-    assert resolved is None
+    assert resolved == result["agent_id"]
 
 
 async def test_list_agents(registry):
@@ -91,20 +91,20 @@ async def test_register_unique_name_no_collision(registry):
     assert result["assigned_name"] == "dev"
 
 
-async def test_register_duplicate_name_gets_suffix(registry):
-    """Second registration with same name gets -1 suffix."""
+async def test_register_duplicate_name_raises(registry):
+    """Second registration with same name raises ValueError."""
     r1 = await registry.register(name="dev", capabilities=[])
-    r2 = await registry.register(name="dev", capabilities=[])
+    with pytest.raises(ValueError, match="already registered"):
+        await registry.register(name="dev", capabilities=[])
+
+
+async def test_register_duplicate_name_force_allows(registry):
+    """Force=True allows duplicate name registration."""
+    r1 = await registry.register(name="dev", capabilities=[])
+    r2 = await registry.register(name="dev", capabilities=[], force=True)
     assert r1["assigned_name"] == "dev"
-    assert r2["assigned_name"] == "dev-1"
-
-
-async def test_register_increment_suffix(registry):
-    """Suffixes increment: dev, dev-1, dev-2."""
-    await registry.register(name="dev", capabilities=[])
-    await registry.register(name="dev", capabilities=[])
-    r3 = await registry.register(name="dev", capabilities=[])
-    assert r3["assigned_name"] == "dev-2"
+    assert r2["assigned_name"] == "dev"
+    assert r1["agent_id"] != r2["agent_id"]
 
 
 async def test_register_independent_bases(registry):
@@ -115,11 +115,13 @@ async def test_register_independent_bases(registry):
     assert r2["assigned_name"] == "test"
 
 
-async def test_register_reclaim_after_deregister(registry):
-    """After deregister, name is released — new reg gets the same name."""
+async def test_register_reclaim_after_deregister_requires_force(registry):
+    """After deregister, name is NOT released (soft delete). Must use force."""
     r1 = await registry.register(name="dev", capabilities=[])
     await registry.deregister(r1["agent_id"])
-    r2 = await registry.register(name="dev", capabilities=[])
+    with pytest.raises(ValueError, match="already registered"):
+        await registry.register(name="dev", capabilities=[])
+    r2 = await registry.register(name="dev", capabilities=[], force=True)
     assert r2["assigned_name"] == "dev"
 
 
@@ -228,3 +230,58 @@ async def test_reconnect_preserves_squad(registry, db):
         "SELECT * FROM squad_memberships WHERE agent_id = ?", (agent_id,)
     )
     assert len(rows) == 1
+
+
+# ---------------------------------------------------------------------------
+# Credential-based reconnect tests
+# ---------------------------------------------------------------------------
+
+
+async def test_reconnect_with_credentials(registry):
+    r = await registry.register(name="dev", capabilities=["code"], session_name="sess_old")
+    agent_id = r["agent_id"]
+    await registry.deregister(agent_id)
+    result = await registry.reconnect(
+        name="dev", agent_id=agent_id, session_name="sess_new"
+    )
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "active"
+    info = await registry.get_info(agent_id)
+    assert info["session_name"] == "sess_new"
+
+
+async def test_reconnect_wrong_agent_id(registry):
+    r = await registry.register(name="dev", capabilities=["code"])
+    await registry.deregister(r["agent_id"])
+    with pytest.raises(ValueError, match="not found"):
+        await registry.reconnect(
+            name="dev", agent_id="agent_wrong_id", session_name="sess_new"
+        )
+
+
+async def test_reconnect_wrong_name(registry):
+    r = await registry.register(name="dev", capabilities=["code"])
+    agent_id = r["agent_id"]
+    await registry.deregister(agent_id)
+    with pytest.raises(ValueError, match="Credential mismatch"):
+        await registry.reconnect(
+            name="wrong-name", agent_id=agent_id, session_name="sess_new"
+        )
+
+
+async def test_reconnect_nonexistent_agent_id(registry):
+    with pytest.raises(ValueError, match="not found"):
+        await registry.reconnect(
+            name="dev", agent_id="agent_nonexistent", session_name="sess_new"
+        )
+
+
+async def test_reconnect_active_agent_with_credentials(registry):
+    r = await registry.register(name="dev", capabilities=[], session_name="old")
+    result = await registry.reconnect(
+        name="dev", agent_id=r["agent_id"], session_name="new"
+    )
+    assert result["agent_id"] == r["agent_id"]
+    assert result["status"] == "active"
+    info = await registry.get_info(r["agent_id"])
+    assert info["session_name"] == "new"
