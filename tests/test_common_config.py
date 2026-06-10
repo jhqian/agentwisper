@@ -11,6 +11,7 @@ def test_default_config():
     assert config.http_host == "127.0.0.1"
     assert config.disconnected_ttl_days == 7
     assert config.cleanup_interval_minutes == 60
+    assert config.message_buffer_limit == 100
 
 
 def test_config_from_env():

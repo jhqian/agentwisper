@@ -34,17 +34,13 @@ class MessageRouter:
         """Resolve a recipient identifier (agent_id or name) to an agent_id.
 
         Tries agent_id lookup first, then falls back to name lookup.
-        Raises ValueError if recipient cannot be resolved or is disconnected.
+        Messages to disconnected agents are buffered and delivered on reconnect.
         """
         agent = await self._agent_store.get(recipient)
         if agent is not None:
-            if agent["status"] == "disconnected":
-                raise ValueError(f"Recipient '{recipient}' is disconnected")
             return agent["agent_id"]
         agent = await self._agent_store.get_by_name(recipient)
         if agent is not None:
-            if agent["status"] == "disconnected":
-                raise ValueError(f"Recipient '{recipient}' is disconnected")
             return agent["agent_id"]
         raise ValueError(f"Recipient '{recipient}' not found")
 

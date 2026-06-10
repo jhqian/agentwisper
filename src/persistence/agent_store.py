@@ -61,18 +61,13 @@ class AgentStore:
         )
 
     async def get_by_name(self, name: str) -> dict[str, Any] | None:
-        """Retrieve an agent by name. Returns None if not found."""
+        """Retrieve an agent by name, preferring active agents. Returns None if not found."""
         return await self._db.execute_fetchone(
-            "SELECT * FROM agents WHERE name = ? LIMIT 1", (name,)
+            "SELECT * FROM agents WHERE name = ? "
+            "ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, last_seen DESC "
+            "LIMIT 1",
+            (name,),
         )
-
-    async def find_names_by_prefix(self, prefix: str) -> list[str]:
-        """Return active agent names matching prefix, excluding disconnected."""
-        rows = await self._db.execute_fetchall(
-            "SELECT name FROM agents WHERE status = 'active' AND (name = ? OR name LIKE ?)",
-            (prefix, f"{prefix}-%"),
-        )
-        return [row["name"] for row in rows]
 
     async def update_status(self, agent_id: str, status: AgentStatus) -> None:
         """Update agent status and track disconnection time."""
@@ -93,6 +88,26 @@ class AgentStore:
             "UPDATE agents SET session_name = ? WHERE agent_id = ?",
             (session_name, agent_id),
         )
+
+    async def update_status_and_session(
+        self, agent_id: str, name: str, status: AgentStatus, session_name: str | None
+    ) -> int:
+        """Atomic credential verify + status/session update.
+
+        Verifies both agent_id AND name match before updating.
+        Returns 1 if updated (credentials match), 0 otherwise.
+        """
+        now = _now_iso()
+        await self._db.execute(
+            "UPDATE agents SET status = ?, last_seen = ?, session_name = ?, "
+            "disconnected_at = NULL WHERE agent_id = ? AND name = ?",
+            (status, now, session_name, agent_id, name),
+        )
+        check = await self._db.execute_fetchone(
+            "SELECT agent_id FROM agents WHERE agent_id = ? AND name = ? AND status = ?",
+            (agent_id, name, status),
+        )
+        return 1 if check is not None else 0
 
     async def update_last_seen(self, agent_id: str) -> None:
         """Update agent last_seen timestamp to now."""

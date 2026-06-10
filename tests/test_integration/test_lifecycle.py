@@ -24,8 +24,8 @@ async def test_reconnect_with_buffered_messages(broker):
 
     await broker.deregister_agent(receiver["agent_id"])
 
-    # Send messages while disconnected (will fail because router rejects disconnected)
-    # Instead, test that reconnect restores agent and buffered count
+    # Messages sent while disconnected are buffered for later delivery
+    # Reconnect restores agent and returns buffered count
     result = await broker.reconnect_agent("receiver")
     assert result["status"] == "active"
     assert result["agent_id"] == receiver["agent_id"]

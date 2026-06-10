@@ -88,10 +88,13 @@ async def test_broker_deregister(broker):
     assert info["status"] == "disconnected"
 
 
-async def test_broker_deregister_releases_name(broker):
+async def test_broker_deregister_name_stays_reserved(broker):
+    """After deregister, name is still reserved. Must use force or reconnect."""
     r = await broker.register_agent("dev", ["code"])
     await broker.deregister_agent(r["agent_id"])
-    r2 = await broker.register_agent("dev", ["test"])
+    with pytest.raises(ValueError, match="already registered"):
+        await broker.register_agent("dev", ["test"])
+    r2 = await broker.register_agent("dev", ["test"], force=True)
     assert r2["assigned_name"] == "dev"
 
 
@@ -162,11 +165,17 @@ async def test_broker_register_wait_and_notify(broker):
     assert r["agent_id"] not in broker._wait_events
 
 
-async def test_broker_register_duplicate_name_gets_suffix(broker):
+async def test_broker_register_duplicate_name_raises(broker):
     r1 = await broker.register_agent("dev", ["code"])
-    r2 = await broker.register_agent("dev", ["test"])
+    with pytest.raises(ValueError, match="already registered"):
+        await broker.register_agent("dev", ["test"])
+
+
+async def test_broker_register_duplicate_name_force(broker):
+    r1 = await broker.register_agent("dev", ["code"])
+    r2 = await broker.register_agent("dev", ["test"], force=True)
     assert r1["assigned_name"] == "dev"
-    assert r2["assigned_name"] == "dev-1"
+    assert r2["assigned_name"] == "dev"
     assert r1["agent_id"] != r2["agent_id"]
 
 
@@ -361,3 +370,54 @@ async def test_broker_start_idempotent(tmp_path):
     info2 = await b2.get_agent_info(r["agent_id"])
     assert info2["status"] == "disconnected"
     await b2.stop()
+
+
+# ---------------------------------------------------------------------------
+# Credential-based reconnect tests
+# ---------------------------------------------------------------------------
+
+
+async def test_broker_reconnect_with_credentials(broker):
+    r = await broker.register_agent("dev", ["code"], session_name="sess_old")
+    agent_id = r["agent_id"]
+    await broker.deregister_agent(agent_id)
+    result = await broker.reconnect_agent(
+        "dev", agent_id=agent_id, session_name="sess_new"
+    )
+    assert result["agent_id"] == agent_id
+    assert result["status"] == "active"
+    info = await broker.get_agent_info(agent_id)
+    assert info["session_name"] == "sess_new"
+
+
+async def test_broker_reconnect_clears_wait_event_before_update(broker):
+    r = await broker.register_agent("dev", ["code"])
+    agent_id = r["agent_id"]
+    event = broker.register_wait(agent_id)
+    assert not event.is_set()
+    await broker.deregister_agent(agent_id)
+    result = await broker.reconnect_agent(
+        "dev", agent_id=agent_id, session_name="sess_new"
+    )
+    assert result["status"] == "active"
+    assert agent_id not in broker._wait_events
+
+
+async def test_broker_reconnect_wrong_credentials(broker):
+    r = await broker.register_agent("dev", ["code"])
+    await broker.deregister_agent(r["agent_id"])
+    with pytest.raises(ValueError, match="not found"):
+        await broker.reconnect_agent(
+            "dev", agent_id="agent_wrong", session_name="sess_new"
+        )
+
+
+async def test_broker_send_to_disconnected_agent_buffers(broker):
+    r1 = await broker.register_agent("sender", [])
+    r2 = await broker.register_agent("receiver", [])
+    await broker.deregister_agent(r2["agent_id"])
+    result = await broker.send_message(
+        r1["agent_id"], r2["agent_id"], "hello", "p2p"
+    )
+    assert result["status"] == "pending"
+    assert result["recipient_id"] == r2["agent_id"]

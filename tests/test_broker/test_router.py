@@ -134,40 +134,47 @@ async def test_poll_auto_acknowledges_direct_message(router, agent_store):
     assert len(msgs) == 0
 
 
-async def test_send_to_disconnected_agent_raises(router, agent_store):
+async def test_send_to_disconnected_agent_buffers(router, agent_store):
     sender = await agent_store.create(name="sender", capabilities=[])
     receiver = await agent_store.create(name="receiver", capabilities=[])
     from common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
-    with pytest.raises(ValueError, match="disconnected"):
-        await router.send_message(
-            sender_id=sender, recipient=receiver,
-            payload='{}', msg_type=MessageType.P2P
-        )
+    result = await router.send_message(
+        sender_id=sender, recipient=receiver,
+        payload='{"hello": true}', msg_type=MessageType.P2P
+    )
+    assert result["status"] == "pending"
+    assert result["recipient_id"] == receiver
+    # Message is buffered and can be polled after reconnect
+    msgs = await router.poll_messages(receiver)
+    assert len(msgs) == 1
+    assert msgs[0]["payload"] == '{"hello": true}'
 
 
-async def test_send_to_disconnected_by_name_raises(router, agent_store):
+async def test_send_to_disconnected_by_name_buffers(router, agent_store):
     sender = await agent_store.create(name="sender", capabilities=[])
     receiver = await agent_store.create(name="alice", capabilities=[])
     from common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
-    with pytest.raises(ValueError, match="disconnected"):
-        await router.send_message(
-            sender_id=sender, recipient="alice",
-            payload='{}', msg_type=MessageType.P2P
-        )
+    result = await router.send_message(
+        sender_id=sender, recipient="alice",
+        payload='{"for_alice": true}', msg_type=MessageType.P2P
+    )
+    assert result["status"] == "pending"
+    assert result["recipient_id"] == receiver
 
 
-async def test_rpc_to_disconnected_agent_raises(router, agent_store):
+async def test_rpc_to_disconnected_agent_buffers(router, agent_store):
     caller = await agent_store.create(name="caller", capabilities=[])
     worker = await agent_store.create(name="worker", capabilities=[])
     from common.types import AgentStatus
     await agent_store.update_status(worker, AgentStatus.DISCONNECTED)
-    with pytest.raises(ValueError, match="disconnected"):
-        await router.send_message(
-            sender_id=caller, recipient=worker,
-            payload='{"task": "build"}', msg_type=MessageType.RPC_REQUEST
-        )
+    result = await router.send_message(
+        sender_id=caller, recipient=worker,
+        payload='{"task": "build"}', msg_type=MessageType.RPC_REQUEST
+    )
+    assert result["status"] == "pending"
+    assert result["recipient_id"] == worker
 
 
 async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):

@@ -46,6 +46,7 @@ async def test_agent_lifecycle_tools(mock_context):
         agent_register,
         agent_deregister,
         agent_info,
+        agent_reconnect,
     )
 
     reg = await agent_register("test", [], ctx=mock_context)
@@ -54,9 +55,13 @@ async def test_agent_lifecycle_tools(mock_context):
     result = await agent_deregister(agent_id, ctx=mock_context)
     assert result["status"] == "disconnected"
 
-    # agent_info auto-restores disconnected agents
+    # agent_info no longer auto-restores disconnected agents
     info = await agent_info(agent_id, ctx=mock_context)
-    assert info["status"] == "active"
+    assert info["status"] == "disconnected"
+
+    # Must explicitly reconnect
+    recon = await agent_reconnect(name="test", agent_id=agent_id, ctx=mock_context)
+    assert recon["status"] == "active"
 
 
 async def test_agent_list_tool(mock_context):
@@ -70,14 +75,17 @@ async def test_agent_list_tool(mock_context):
 
 
 async def test_agent_deregister_tool(mock_context):
-    from mcp_server.server import agent_register, agent_deregister, agent_info
+    from mcp_server.server import agent_register, agent_deregister, agent_info, agent_reconnect
 
     reg = await agent_register("x", [], ctx=mock_context)
     result = await agent_deregister(reg["agent_id"], ctx=mock_context)
     assert result["status"] == "disconnected"
-    # agent_info auto-restores disconnected agents
+    # agent_info no longer auto-restores
     info = await agent_info(reg["agent_id"], ctx=mock_context)
-    assert info["status"] == "active"
+    assert info["status"] == "disconnected"
+    # Reconnect with credentials restores the agent
+    recon = await agent_reconnect(name="x", agent_id=reg["agent_id"], ctx=mock_context)
+    assert recon["status"] == "active"
 
 
 async def test_agent_register_with_session_name(mock_context):
@@ -112,12 +120,82 @@ async def test_agent_reconnect_while_active(mock_context):
     from mcp_server.server import agent_register, agent_reconnect, agent_info
 
     reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
-    # Reconnect without deregistering — agent is still active
+    # Reconnect without deregistering -- agent is still active
     result = await agent_reconnect("dev", session_name="sess_new", ctx=mock_context)
     assert result["status"] == "active"
     assert result["agent_id"] == reg["agent_id"]
     info = await agent_info(reg["agent_id"], ctx=mock_context)
     assert info["session_name"] == "sess_new"
+
+
+async def test_agent_reconnect_with_credentials(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect
+
+    reg = await agent_register("dev", ["code"], session_name="old", ctx=mock_context)
+    agent_id = reg["agent_id"]
+    await agent_deregister(agent_id, ctx=mock_context)
+    result = await agent_reconnect(
+        name="dev", agent_id=agent_id, session_name="new", ctx=mock_context
+    )
+    assert result["status"] == "active"
+    assert result["agent_id"] == agent_id
+
+
+async def test_agent_reconnect_wrong_credentials(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect
+
+    reg = await agent_register("dev", ["code"], ctx=mock_context)
+    await agent_deregister(reg["agent_id"], ctx=mock_context)
+    with pytest.raises(Exception):
+        await agent_reconnect(
+            name="dev", agent_id="agent_wrong", session_name="new", ctx=mock_context
+        )
+
+
+async def test_agent_reconnect_no_agent_id_legacy(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect
+
+    reg = await agent_register("dev", ["code"], ctx=mock_context)
+    await agent_deregister(reg["agent_id"], ctx=mock_context)
+    result = await agent_reconnect(name="dev", session_name="new", ctx=mock_context)
+    assert result["status"] == "active"
+
+
+async def test_resolve_agent_session_check(mock_context):
+    """_resolve_agent raises ValueError when session_name mismatches."""
+    from mcp_server.server import _resolve_agent, _get_broker
+    from mcp_server.server import agent_register, agent_reconnect
+
+    broker = _get_broker(mock_context)
+    reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
+    agent_id = reg["agent_id"]
+    # Takeover
+    await agent_reconnect(
+        name="dev", agent_id=agent_id, session_name="sess_new", ctx=mock_context
+    )
+    # Resolve with old session_name should fail
+    with pytest.raises(ValueError, match="Session invalidated"):
+        await _resolve_agent(broker, agent_id, session_name="sess_old")
+    # Resolve with new session_name should succeed
+    resolved = await _resolve_agent(broker, agent_id, session_name="sess_new")
+    assert resolved == agent_id
+
+
+async def test_resolve_agent_any_status_no_auto_restore(mock_context):
+    """_resolve_agent_any_status does NOT auto-restore disconnected agents."""
+    from mcp_server.server import _resolve_agent_any_status, _get_broker
+    from mcp_server.server import agent_register, agent_deregister
+
+    broker = _get_broker(mock_context)
+    reg = await agent_register("dev", ["code"], ctx=mock_context)
+    agent_id = reg["agent_id"]
+    await agent_deregister(agent_id, ctx=mock_context)
+    # Should resolve without error (returns agent_id)
+    resolved = await _resolve_agent_any_status(broker, agent_id)
+    assert resolved == agent_id
+    # But agent should still be disconnected
+    info = await broker.get_agent_info(agent_id)
+    assert info["status"] == "disconnected"
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +206,7 @@ async def test_agent_reconnect_while_active(mock_context):
 async def test_resolve_agent_raises_for_nonexistent(mock_context):
     from mcp_server.server import _resolve_agent, message_send
 
-    with pytest.raises(ValueError, match="not found or is disconnected"):
+    with pytest.raises(ValueError, match="not found"):
         await _resolve_agent(mock_context.request_context.lifespan_context, "ghost")
 
 
@@ -136,28 +214,28 @@ async def test_message_send_sender_not_found(mock_context):
     from mcp_server.server import agent_register, message_send
 
     r = await agent_register("receiver", [], ctx=mock_context)
-    with pytest.raises(ValueError, match="not found or is disconnected"):
+    with pytest.raises(ValueError, match="not found"):
         await message_send("nonexistent", r["agent_id"], "hello", ctx=mock_context)
 
 
 async def test_message_poll_agent_not_found(mock_context):
     from mcp_server.server import message_poll
 
-    with pytest.raises(ValueError, match="not found or is disconnected"):
+    with pytest.raises(ValueError, match="not found"):
         await message_poll("nonexistent", ctx=mock_context)
 
 
 async def test_message_wait_agent_not_found(mock_context):
     from mcp_server.server import message_wait
 
-    with pytest.raises(ValueError, match="not found or is disconnected"):
+    with pytest.raises(ValueError, match="not found"):
         await message_wait("nonexistent", timeout=0, ctx=mock_context)
 
 
 async def test_topic_subscribe_agent_not_found(mock_context):
     from mcp_server.server import topic_subscribe
 
-    with pytest.raises(ValueError, match="not found or is disconnected"):
+    with pytest.raises(ValueError, match="not found"):
         await topic_subscribe("nonexistent", "alerts", ctx=mock_context)
 
 
@@ -176,12 +254,12 @@ async def test_agent_deregister_not_found(mock_context):
 
 
 # ---------------------------------------------------------------------------
-# Auto-restore: disconnected agents are restored on first MCP call
+# Reconnect: disconnected agents must be explicitly reconnected
 # ---------------------------------------------------------------------------
 
 
-async def test_auto_restore_on_message_send(mock_context):
-    from mcp_server.server import agent_register, agent_deregister, message_send, agent_info
+async def test_reconnect_before_message_send(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect, message_send, agent_info
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -189,28 +267,36 @@ async def test_auto_restore_on_message_send(mock_context):
     # Disconnect sender
     await agent_deregister(r1["agent_id"], ctx=mock_context)
 
-    # Sending a message auto-restores the disconnected sender
-    msg = await message_send(r1["agent_id"], r2["agent_id"], "hello after restore", ctx=mock_context)
+    # Must reconnect before sending
+    recon = await agent_reconnect(
+        name="sender", agent_id=r1["agent_id"], ctx=mock_context
+    )
+    assert recon["status"] == "active"
+
+    msg = await message_send(r1["agent_id"], r2["agent_id"], "hello after reconnect", ctx=mock_context)
     assert "msg_id" in msg
     assert msg["status"] == "sent"
-    assert "recipient_id" not in msg
 
     info = await agent_info(r1["agent_id"], ctx=mock_context)
     assert info["status"] == "active"
 
 
-async def test_auto_restore_on_message_poll(mock_context):
-    from mcp_server.server import agent_register, message_send, message_poll, agent_info
+async def test_reconnect_before_message_poll(mock_context):
+    from mcp_server.server import agent_register, message_send, message_poll, agent_deregister, agent_reconnect, agent_info
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
 
     # Send a message to r2, then disconnect r2
     await message_send(r1["agent_id"], r2["agent_id"], "pending-msg", ctx=mock_context)
-    from mcp_server.server import agent_deregister
     await agent_deregister(r2["agent_id"], ctx=mock_context)
 
-    # Polling auto-restores the disconnected receiver
+    # Must reconnect before polling
+    recon = await agent_reconnect(
+        name="receiver", agent_id=r2["agent_id"], ctx=mock_context
+    )
+    assert recon["status"] == "active"
+
     result = await message_poll(r2["agent_id"], ctx=mock_context)
     assert result["count"] >= 1
 
@@ -218,13 +304,18 @@ async def test_auto_restore_on_message_poll(mock_context):
     assert info["status"] == "active"
 
 
-async def test_auto_restore_on_subscribe(mock_context):
-    from mcp_server.server import agent_register, agent_deregister, topic_subscribe, agent_info
+async def test_reconnect_before_subscribe(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, agent_reconnect, topic_subscribe, agent_info
 
     reg = await agent_register("sub", [], ctx=mock_context)
     await agent_deregister(reg["agent_id"], ctx=mock_context)
 
-    # Subscribing auto-restores the disconnected agent
+    # Must reconnect before subscribing
+    recon = await agent_reconnect(
+        name="sub", agent_id=reg["agent_id"], ctx=mock_context
+    )
+    assert recon["status"] == "active"
+
     sub = await topic_subscribe(reg["agent_id"], "alerts", ctx=mock_context)
     assert "sub_id" in sub
 
@@ -232,10 +323,10 @@ async def test_auto_restore_on_subscribe(mock_context):
     assert info["status"] == "active"
 
 
-async def test_auto_restore_preserves_squad_after_broker_restart(mock_context):
-    """Simulate broker restart: agent marked disconnected, but squad resources preserved."""
+async def test_reconnect_preserves_squad_after_broker_restart(mock_context):
+    """Simulate broker restart: agent marked disconnected, reconnect preserves squad."""
     from mcp_server.server import (
-        agent_register, squad_create, squad_join, squad_info, agent_info,
+        agent_register, squad_create, squad_join, squad_info, agent_info, agent_reconnect,
     )
 
     leader = await agent_register("leader", [], ctx=mock_context)
@@ -251,28 +342,35 @@ async def test_auto_restore_preserves_squad_after_broker_restart(mock_context):
     from common.types import AgentStatus
     await broker._registry._agent_store.update_status(member["agent_id"], AgentStatus.DISCONNECTED)
 
-    # Any MCP call auto-restores the agent
+    # Reconnect with credentials restores the agent
+    recon = await agent_reconnect(
+        name="member", agent_id=member["agent_id"], ctx=mock_context
+    )
+    assert recon["status"] == "active"
+
     info = await agent_info(member["agent_id"], ctx=mock_context)
     assert info["status"] == "active"
     # Squad membership preserved (was never deregister-cleaned)
     assert info["squad_id"] == squad["squad_id"]
 
 
-async def test_auto_restore_by_name(mock_context):
-    from mcp_server.server import agent_register, agent_deregister, message_send, agent_info
+async def test_send_to_disconnected_by_name_buffers(mock_context):
+    from mcp_server.server import agent_register, agent_deregister, message_send, message_poll
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
 
     await agent_deregister(r2["agent_id"], ctx=mock_context)
 
-    # Sending to a disconnected agent by name auto-restores it
-    msg = await message_send(r1["agent_id"], "receiver", "hello", ctx=mock_context)
-    assert "msg_id" in msg
-    assert msg["status"] == "sent"
+    # Sending to a disconnected agent buffers the message
+    result = await message_send(r1["agent_id"], "receiver", "hello", ctx=mock_context)
+    assert result["status"] == "sent"
+    assert result["buffered"] is True
 
-    info = await agent_info(r2["agent_id"], ctx=mock_context)
-    assert info["status"] == "active"
+    # Message can be polled after the agent reconnects
+    result = await message_poll(r2["agent_id"], ctx=mock_context)
+    assert result["count"] >= 1
+    assert any(m["payload"] == "hello" for m in result["messages"])
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +486,7 @@ async def test_message_send_and_poll(mock_context):
     )
     assert "msg_id" in msg
     assert msg["status"] == "sent"
-    assert "recipient_id" not in msg
+    assert msg["recipient_id"] == r2["agent_id"]
 
     polled = await message_poll(r2["agent_id"], ctx=mock_context)
     assert polled["count"] >= 1
