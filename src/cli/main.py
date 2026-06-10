@@ -8,7 +8,13 @@ from __future__ import annotations
 import click
 
 
+def _get_version() -> str:
+    from common.version import get_version
+    return get_version()
+
+
 @click.group()
+@click.version_option(version=_get_version(), prog_name="agentsquad")
 def cli() -> None:
     """Vibe AgentSquad - Multi-agent communication platform."""
     pass
