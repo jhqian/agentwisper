@@ -68,10 +68,13 @@ async def broker_lifespan(app: FastMCP):
     """Lifespan context manager that yields the shared Broker singleton.
 
     The Broker is created on first access and reused across sessions.
-    It is only torn down when the process exits.
+    On shutdown the Broker is stopped so the database connection closes.
     """
     broker = await _get_or_create_broker()
-    yield broker
+    try:
+        yield broker
+    finally:
+        await broker.stop()
 
 
 mcp = FastMCP(
@@ -533,7 +536,10 @@ def create_server() -> FastMCP:
 
 def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     """Run the MCP server with streamable-http transport."""
+    import asyncio
     import logging
+
+    import uvicorn
 
     from common.version import get_version
 
@@ -551,4 +557,14 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     mcp.settings.port = port
     mcp.settings.host = host
     mcp.settings.log_level = "warning"
-    mcp.run(transport="streamable-http")
+
+    starlette_app = mcp.streamable_http_app()
+    config = uvicorn.Config(
+        starlette_app,
+        host=host,
+        port=port,
+        log_level="warning",
+        timeout_graceful_shutdown=5,
+    )
+    server = uvicorn.Server(config)
+    asyncio.run(server.serve())

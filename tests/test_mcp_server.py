@@ -646,15 +646,21 @@ def test_mcp_instance_has_tools():
 
 
 def test_run_server_sets_host_and_port():
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     from mcp_server.server import run_server
 
-    with patch("mcp_server.server.mcp") as mock_mcp:
+    with patch("uvicorn.Server") as mock_server_cls, \
+         patch("uvicorn.Config") as mock_config_cls:
+        mock_server = mock_server_cls.return_value
+        mock_server.serve = AsyncMock()
         run_server(port=9000, host="0.0.0.0")
-        assert mock_mcp.settings.port == 9000
-        assert mock_mcp.settings.host == "0.0.0.0"
-        mock_mcp.run.assert_called_once_with(transport="streamable-http")
+        mock_config_cls.assert_called_once()
+        config_kwargs = mock_config_cls.call_args.kwargs
+        assert config_kwargs["host"] == "0.0.0.0"
+        assert config_kwargs["port"] == 9000
+        assert config_kwargs["timeout_graceful_shutdown"] == 5
+        mock_server.serve.assert_called_once()
 
 
 async def test_message_send_with_client_msg_id(mock_context):
