@@ -138,7 +138,7 @@ class AgentRegistry:
         agent = await self._agent_store.get_by_name(name)
         if agent is None:
             raise ValueError(
-                f"No agent named '{name}' found. It may have never been registered "
+                f"Agent named '{name}' not found. It may have never been registered "
                 f"or may have expired after the retention period."
             )
         agent_id = agent["agent_id"]
