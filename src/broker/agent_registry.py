@@ -181,6 +181,10 @@ class AgentRegistry:
             return await self._agent_store.list_by_squad(squad_id)
         return await self._agent_store.list_all()
 
+    async def list_active(self) -> list[dict[str, Any]]:
+        """List active agents ordered by creation time."""
+        return await self._agent_store.list_active()
+
     async def cleanup_expired(self, ttl_days: int) -> int:
         """Delegate to AgentStore cleanup."""
         return await self._agent_store.cleanup_expired_agents(ttl_days)
