@@ -285,3 +285,20 @@ async def test_reconnect_active_agent_with_credentials(registry):
     assert result["status"] == "active"
     info = await registry.get_info(r["agent_id"])
     assert info["session_name"] == "new"
+
+
+async def test_registry_list_active_excludes_disconnected(registry):
+    a1 = await registry.register(name="alive", capabilities=["code"])
+    a2 = await registry.register(name="ghost", capabilities=[])
+    await registry.deregister(a2["agent_id"])
+    agents = await registry.list_active()
+    ids = [a["agent_id"] for a in agents]
+    assert a1["agent_id"] in ids
+    assert a2["agent_id"] not in ids
+
+
+async def test_registry_list_active_delegates_to_store(registry):
+    await registry.register(name="dev", capabilities=["code"])
+    agents = await registry.list_active()
+    assert len(agents) == 1
+    assert agents[0]["name"] == "dev"
