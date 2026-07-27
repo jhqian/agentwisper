@@ -22,7 +22,7 @@ Verify the installation by collecting tests:
 
 ```bash
 uv run pytest --co -q
-# 182 tests collected
+# 261 tests collected
 ```
 
 ## Using Tools in MCP Clients
@@ -336,41 +336,9 @@ team_dismiss(team_id="t1", caller_id="a1b2c3d4")
 
 Team messaging uses the reserved `team:<team_id>` topic pattern.
 
-### Agent Pause and Resume
-
-Pause an agent to buffer incoming messages without delivering them.
-
-**Tool call:**
-
-```
-agent_pause(agent_id="e5f6g7h8")
-// => {"status": "paused"}
-
-agent_resume(agent_id="e5f6g7h8")
-// => {"status": "active", "buffered_count": 3}
-```
-
-**In Claude Code:**
-
-```
-> Pause agent "tester"
-```
-
-```
-> Resume agent "tester"
-```
-
-Only agents in `active` status can be paused. Only agents in `paused` status can be resumed. `buffered_count` reports how many messages were held.
-
 ### Liveness Detection
 
-The broker tracks agent activity automatically. Every MCP tool call updates a `last_seen` timestamp. A background monitor marks agents as `disconnected` if they are inactive beyond the timeout.
-
-No explicit heartbeat tool is needed -- any tool call (poll, send, subscribe, etc.) serves as a liveness signal.
-
-- Default check interval: 30 seconds (`AGENTSQUAD_LIVENESS_INTERVAL`)
-- Default inactivity timeout: 90 seconds (`AGENTSQUAD_LIVENESS_TIMEOUT`)
-- A disconnected agent making any MCP call is **auto-restored** to `active` status
+The broker tracks each agent's last activity via a `last_seen` timestamp, updated on every MCP tool call. Agents move to `disconnected` status only on explicit `agent_deregister`, or when the broker restarts (startup resets all active agents to disconnected, forcing each to reconnect). There is no background heartbeat monitor and no automatic status restoration -- a disconnected agent must call `agent_reconnect` to resume.
 
 ### Message Notification
 
@@ -404,37 +372,16 @@ message_wait(agent_id="e5f6g7h8", timeout=30)
 - Default timeout: 30 seconds
 - Returns `waited: true` if it actually blocked, `false` if messages were already pending
 
-### agent_wake
-
-Wake a paused or disconnected agent and optionally inject a message. Inspired by Claude Code's instance activation pattern.
-
-**Tool call:**
-
-```
-agent_wake(agent_id="e5f6g7h8", message="Please review the latest changes")
-// => {"status": "active", "message_queued": true}
-```
-
-**In Claude Code:**
-
-```
-> Wake agent "tester" and tell it to run the test suite
-```
-
-- If the agent is `paused` or `disconnected`, it is restored to `active`
-- The optional `message` parameter injects a system notification that the agent receives on its next poll
-- This enables agent-to-agent activation: one agent can start another
-
 ## Running Tests
 
 ```bash
-# All 182 unit tests
+# All 261 tests
 uv run pytest
 
-# Smoke test -- 22 checks covering core broker lifecycle
+# Smoke test -- 24 checks covering core broker lifecycle
 uv run python tests/smoke_test.py
 
-# System test -- 58 checks covering end-to-end flows
+# System test -- 55 checks covering end-to-end flows
 uv run python tests/system_test.py
 ```
 
@@ -459,8 +406,6 @@ Environment variables use the `AGENTSQUAD_` prefix:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AGENTSQUAD_DB_PATH` | `agentsquad.db` | SQLite database file path |
-| `AGENTSQUAD_LIVENESS_INTERVAL` | `30` | Seconds between liveness checks |
-| `AGENTSQUAD_LIVENESS_TIMEOUT` | `90` | Seconds before inactive agent marked offline |
 | `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
 | `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
 | `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
@@ -483,7 +428,3 @@ Observers have read-only access -- they can subscribe, poll, and query but canno
 **Deregister fails with foreign key error**
 
 The agent likely has active subscriptions, squad memberships, or pending messages. Call `deregister_agent` handles cleanup automatically -- ensure the agent ID exists and is currently registered.
-
-**Messages not delivered after resume**
-
-Paused agents buffer messages. After `agent_resume`, call `message_poll` to retrieve buffered messages. The `buffered_count` in the resume response confirms how many are waiting.

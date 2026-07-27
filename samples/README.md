@@ -225,7 +225,6 @@ This calls `agent_deregister(agent_id="<agent_id>")`.
 
 - Try the **RPC pattern**: Send a message with `msg_type="rpc_request"` and respond via `message_send` back to the caller
 - Experiment with **roles**: Make Agent B an `observer` -- it can subscribe and poll but cannot send messages
-- Try **agent pause/resume**: Pause Agent B, send messages, then resume to see buffered delivery
 - Add a **third agent**: Start another Claude Code instance with the plugin installed
 - Test **blocking wait**: Use `/agentsquad:wait 30` on Agent B, then send a message from Agent A -- the wait should return immediately
 
