@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import anyio
+import json
 import logging
 
 from common.version import get_version
@@ -138,6 +139,26 @@ class Broker:
     # Agent operations  (delegates to AgentRegistry)
     # ------------------------------------------------------------------
 
+    async def _build_peers(self) -> list[dict]:
+        """Build the active-agent snapshot included in register/reconnect responses.
+
+        Returns the minimal fields a newly-joined agent needs to address
+        others: agent_id, name, and capabilities (deserialized to a list).
+        Malformed capabilities propagate as JSONDecodeError rather than
+        being silently swallowed.
+        """
+        rows = await self._registry.list_active()
+        # TODO: agent_list still returns capabilities as a JSON string;
+        # unify both responses in a separate breaking change.
+        return [
+            {
+                "agent_id": row["agent_id"],
+                "name": row["name"],
+                "capabilities": json.loads(row["capabilities"]),
+            }
+            for row in rows
+        ]
+
     async def register_agent(
         self,
         name: str,
@@ -168,10 +189,12 @@ class Broker:
             "Agent registered: %s (%s) capabilities=%s session=%s",
             result["assigned_name"], result["agent_id"], capabilities, session_name,
         )
+        peers = await self._build_peers()
         return {
             "agent_id": result["agent_id"],
             "assigned_name": result["assigned_name"],
             "status": "active",
+            "peers": peers,
         }
 
     async def deregister_agent(self, agent_id: str) -> dict:

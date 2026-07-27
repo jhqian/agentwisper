@@ -3,6 +3,8 @@
 
 """Tests for the Broker core orchestrator."""
 
+import json
+
 import pytest
 
 from broker.core import Broker
@@ -421,3 +423,66 @@ async def test_broker_send_to_disconnected_agent_buffers(broker):
     )
     assert result["status"] == "pending"
     assert result["recipient_id"] == r2["agent_id"]
+
+
+async def test_register_returns_peers_with_self(broker):
+    r = await broker.register_agent("dev", ["code"])
+    assert "peers" in r
+    peer_ids = [p["agent_id"] for p in r["peers"]]
+    assert r["agent_id"] in peer_ids
+
+
+async def test_register_peers_excludes_disconnected(broker):
+    r1 = await broker.register_agent("alive", ["code"])
+    await broker.register_agent("ghost", [])
+    await broker.deregister_agent(r1["agent_id"])
+    r3 = await broker.register_agent("joiner", [])
+    peer_names = [p["name"] for p in r3["peers"]]
+    assert "ghost" in peer_names
+    assert "alive" not in peer_names
+
+
+async def test_register_peers_field_shape(broker):
+    await broker.register_agent("dev", ["code"])
+    r2 = await broker.register_agent("joiner", [])
+    peer = r2["peers"][0]
+    assert set(peer.keys()) == {"agent_id", "name", "capabilities"}
+
+
+async def test_register_peers_capabilities_deserialized(broker):
+    await broker.register_agent("dev", ["code", "review"])
+    r2 = await broker.register_agent("joiner", [])
+    peer = [p for p in r2["peers"] if p["name"] == "dev"][0]
+    assert peer["capabilities"] == ["code", "review"]
+    assert isinstance(peer["capabilities"], list)
+
+
+async def test_register_peers_empty_capabilities(broker):
+    await broker.register_agent("empty", [])
+    r2 = await broker.register_agent("joiner", ["code"])
+    peer = [p for p in r2["peers"] if p["name"] == "empty"][0]
+    assert peer["capabilities"] == []
+
+
+async def test_register_first_agent_peers_length_one(broker):
+    r = await broker.register_agent("solo", ["code"])
+    assert len(r["peers"]) == 1
+    assert r["peers"][0]["name"] == "solo"
+
+
+async def test_register_peers_ordered_by_created_at(broker):
+    await broker.register_agent("first", [])
+    await broker.register_agent("second", [])
+    r3 = await broker.register_agent("third", [])
+    names = [p["name"] for p in r3["peers"]]
+    assert names == ["first", "second", "third"]
+
+
+async def test_register_peers_raises_on_malformed_capabilities(broker):
+    await broker.register_agent("first", ["code"])
+    await broker._db.execute(
+        "UPDATE agents SET capabilities = ? WHERE name = ?",
+        ("not-valid-json", "first"),
+    )
+    with pytest.raises(json.JSONDecodeError):
+        await broker.register_agent("second", [])
