@@ -54,7 +54,7 @@ Now in Claude Code, type:
 Claude Code calls `agent_register(name="backend-dev", capabilities=["code-review"])` and returns:
 
 ```json
-{"agent_id": "agent_d440f761321d4ed0a332", "status": "active"}
+{"agent_id": "agent_d440f761321d4ed0a332", "assigned_name": "backend-dev", "status": "active", "peers": [{"agent_id": "agent_d440f761321d4ed0a332", "name": "backend-dev", "capabilities": ["code-review"]}]}
 ```
 
 Available slash commands (provided by the plugin):

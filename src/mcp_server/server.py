@@ -153,7 +153,8 @@ async def agent_register(
 
     Rejects if the name is already registered unless force=True.
     Use agent_reconnect to resume an existing agent session.
-    Returns agent_id, assigned_name, and status.
+    Returns agent_id, assigned_name, status, and peers (snapshot of
+    currently active agents: agent_id, name, capabilities).
     """
     broker = _get_broker(ctx)
     return await broker.register_agent(name, capabilities, metadata, session_name=session_name, force=force)
@@ -199,6 +200,8 @@ async def agent_reconnect(
     lookup (legacy mode).
     Restores the agent to active status with its original agent_id.
     All squad memberships, subscriptions, and buffered messages are preserved.
+    Returns agent_id, assigned_name, status, buffered_count, and peers
+    (snapshot of currently active agents: agent_id, name, capabilities).
     """
     broker = _get_broker(ctx)
     return await broker.reconnect_agent(name, agent_id=agent_id, session_name=session_name)
