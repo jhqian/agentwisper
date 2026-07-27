@@ -219,3 +219,33 @@ async def test_update_status_and_session_wrong_id(store):
         "agent_nonexistent", "dev", AgentStatus.ACTIVE, "new_sess"
     )
     assert rows == 0
+
+
+async def test_list_active_filters_disconnected(store):
+    a1 = await store.create(name="active-agent", capabilities=["code"])
+    a2 = await store.create(name="gone-agent", capabilities=[])
+    await store.update_status(a2, AgentStatus.DISCONNECTED)
+    agents = await store.list_active()
+    assert len(agents) == 1
+    assert agents[0]["agent_id"] == a1
+
+
+async def test_list_active_orders_by_created_at(store):
+    a1 = await store.create(name="first", capabilities=[])
+    a2 = await store.create(name="second", capabilities=[])
+    agents = await store.list_active()
+    assert [a["agent_id"] for a in agents] == [a1, a2]
+
+
+async def test_list_active_empty_when_all_disconnected(store):
+    a1 = await store.create(name="a", capabilities=[])
+    await store.update_status(a1, AgentStatus.DISCONNECTED)
+    assert await store.list_active() == []
+
+
+async def test_list_active_returns_full_rows(store):
+    await store.create(name="dev", capabilities=["code", "review"], metadata={"k": "v"})
+    agents = await store.list_active()
+    assert agents[0]["status"] == "active"
+    assert "metadata" in agents[0]
+    assert "capabilities" in agents[0]

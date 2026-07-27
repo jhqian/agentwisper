@@ -214,3 +214,10 @@ class AgentStore:
             "SELECT * FROM agents WHERE squad_id = ? ORDER BY created_at",
             (squad_id,),
         )
+
+    async def list_active(self) -> list[dict[str, Any]]:
+        """List active (connected) agents ordered by creation time."""
+        return await self._db.execute_fetchall(
+            "SELECT * FROM agents WHERE status = ? ORDER BY created_at",
+            (AgentStatus.ACTIVE,),
+        )
