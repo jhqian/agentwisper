@@ -247,7 +247,8 @@ class Broker:
             "Agent reconnected: %s (%s) session=%s buffered=%d",
             name, result["agent_id"], session_name, result.get("buffered_count", 0),
         )
-        return result
+        peers = await self._build_peers()
+        return {**result, "peers": peers}
 
     async def get_agent_info(self, agent_id: str) -> dict | None:
         return await self._registry.get_info(agent_id)
