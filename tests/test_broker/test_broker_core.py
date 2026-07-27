@@ -486,3 +486,26 @@ async def test_register_peers_raises_on_malformed_capabilities(broker):
     )
     with pytest.raises(json.JSONDecodeError):
         await broker.register_agent("second", [])
+
+
+async def test_reconnect_returns_peers_with_self(broker):
+    r = await broker.register_agent("dev", ["code"])
+    agent_id = r["agent_id"]
+    await broker.deregister_agent(agent_id)
+    result = await broker.reconnect_agent("dev", agent_id=agent_id)
+    assert "peers" in result
+    peer_ids = [p["agent_id"] for p in result["peers"]]
+    assert agent_id in peer_ids
+
+
+async def test_reconnect_preserves_buffered_count_and_peers(broker):
+    r1 = await broker.register_agent("sender", [])
+    r2 = await broker.register_agent("receiver", [])
+    await broker.deregister_agent(r2["agent_id"])
+    await broker.send_message(r1["agent_id"], r2["agent_id"], "hello", "p2p")
+    result = await broker.reconnect_agent("receiver", agent_id=r2["agent_id"])
+    assert result["buffered_count"] >= 1
+    assert "peers" in result
+    peer_names = [p["name"] for p in result["peers"]]
+    assert "sender" in peer_names
+    assert "receiver" in peer_names
