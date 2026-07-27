@@ -4,7 +4,7 @@
 
 ## Overview
 
-agentsquad is a multi-agent communication platform that provides a central broker for agent coordination, message routing, and team management. It exposes 28 MCP tools across 6 categories through a FastMCP server with streamable-http transport. Agents communicate via P2P messaging, RPC, or Pub/Sub patterns with full SQLite WAL persistence.
+agentsquad is a message broker that lets AI agents coordinate through the Model Context Protocol. Any MCP client — Claude Code, Codex, or a custom agent — registers with the broker, discovers active peers, and exchanges messages with no custom protocol or shared runtime. Agents group into persistent squads with role-based membership for long-running work, or ad-hoc teams for cross-squad tasks, and communicate through direct point-to-point messaging, RPC request/response, or topic-based pub/sub. The broker buffers messages for offline agents and restores identity on reconnect, so an agent can drop and resume without losing state or subscriptions. It runs as a single process backed by SQLite in WAL mode and exposes 26 MCP tools across 6 categories over streamable-http, with no external services or message queues to operate.
 
 ## Architecture
 
@@ -23,11 +23,6 @@ agentsquad is a multi-agent communication platform that provides a central broke
 |  | P2P/RPC/ | | Registry  | |   Manager      |   |
 |  |  PubSub  | |           | |                |   |
 |  +----+-----+ +-----+-----+ +------+---------+   |
-|       +--------------+------+                   |
-|              +-------+--------+                  |
-|              | Heartbeat     |                   |
-|              | Monitor       |                   |
-|              +---------------+                   |
 |                                                   |
 |  +---------------------------------------------+ |
 |  |        Persistence Layer (SQLite WAL)        | |
@@ -41,11 +36,10 @@ agentsquad is a multi-agent communication platform that provides a central broke
 ## Features
 
 - **Central Broker** -- single-process message broker with SQLite WAL persistence
-- **28 MCP Tools** -- agent management, squad operations, ad-hoc teams, messaging, subscriptions, health
+- **26 MCP Tools** -- agent management, squad operations, ad-hoc teams, messaging, subscriptions, health
 - **Communication Patterns** -- P2P direct messaging, RPC request/response, Pub/Sub topic subscriptions
 - **Squad Model** -- persistent named groups with role-based membership and shared state
 - **Ad-hoc Teams** -- lightweight temporary groups created from multiple squads
-- **Heartbeat Monitoring** -- automatic agent liveness detection with configurable intervals
 - **Message Polling & Wait** -- agents poll or block-wait for messages with `anyio.Event` zero-latency notification
 - **Retention Policy** -- automatic cleanup of expired messages and stale agents
 
@@ -96,17 +90,15 @@ codex mcp add agentsquad-broker --transport streamable_http --url "http://localh
 
 ## MCP Tools Reference
 
-### Agent Management (7 tools)
+### Agent Management (5 tools)
 
 | Tool | Description |
 |------|-------------|
 | `agent_register` | Register a new agent with name and capabilities |
 | `agent_deregister` | Remove an agent and clean up its subscriptions |
+| `agent_reconnect` | Reconnect a disconnected agent; restores identity, memberships, and buffered messages |
 | `agent_list` | List all registered agents |
 | `agent_info` | Get detailed information about a specific agent |
-| `agent_pause` | Pause an agent (buffer messages) |
-| `agent_resume` | Resume a paused agent |
-| `agent_wake` | Wake a paused agent and optionally inject a message |
 
 ### Squad Management (8 tools)
 
@@ -130,16 +122,15 @@ codex mcp add agentsquad-broker --transport streamable_http --url "http://localh
 | `team_list` | List all active ad-hoc teams |
 | `team_info` | Get team composition and purpose |
 
-### Messaging (7 tools)
+### Messaging (6 tools)
 
 | Tool | Description |
 |------|-------------|
 | `message_send` | Send a P2P or RPC message to a specific agent |
 | `message_broadcast` | Broadcast a message to topic subscribers |
-| `message_reply` | Reply to an RPC request |
 | `message_poll` | Poll for pending messages |
 | `message_wait` | Block until messages arrive (zero-latency via anyio.Event) |
-| `message_ack` | Acknowledge message delivery |
+| `message_get` | Retrieve a single message by its msg_id |
 | `message_query` | Query message history with filters |
 
 ### Subscription (2 tools)
@@ -149,11 +140,10 @@ codex mcp add agentsquad-broker --transport streamable_http --url "http://localh
 | `topic_subscribe` | Subscribe an agent to a topic |
 | `topic_unsubscribe` | Unsubscribe from a topic |
 
-### Health (2 tools)
+### Health (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `heartbeat` | Signal agent is alive |
 | `broker_status` | Get broker health, agent count, queue depth |
 
 ## Configuration
@@ -163,8 +153,6 @@ Environment variables use the `AGENTSQUAD_` prefix:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AGENTSQUAD_DB_PATH` | `agentsquad.db` | SQLite database file path |
-| `AGENTSQUAD_HEARTBEAT_INTERVAL` | `30` | Seconds between heartbeat checks |
-| `AGENTSQUAD_HEARTBEAT_TIMEOUT` | `90` | Seconds before agent marked offline |
 | `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
 | `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
 | `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
@@ -200,7 +188,7 @@ Agent A                          Broker                          Agent B
   |                                |<--- message_poll() -------------|
   |                                |--- deliver request ----------->|
   |                                |                                |
-  |                                |<--- message_reply() -----------|
+  |                                |<--- message_send() ------------|
   |<-- RPC response ---------------|                                |
   |                                |                                |
 ```
@@ -255,10 +243,10 @@ agentsquad/
   src/
     common/              # Types, config
     persistence/         # Database, stores
-    broker/              # Registry, managers, router, heartbeat, core
-    mcp_server/          # FastMCP tools (28 tools)
+    broker/              # Registry, managers, router, core
+    mcp_server/          # FastMCP tools (26 tools)
     cli/                 # Click CLI entry point
-  tests/                 # Test suite (182 unit tests)
+  tests/                 # Test suite (261 tests, incl. 13 integration)
   samples/               # Demo scripts and slash commands
 ```
 
