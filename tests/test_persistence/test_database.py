@@ -1,5 +1,5 @@
 import pytest
-from agentsquad.persistence.database import AsyncDatabase, MIGRATIONS
+from agentwisper.persistence.database import AsyncDatabase, MIGRATIONS
 
 
 @pytest.fixture

@@ -1,14 +1,14 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for SquadManager business logic with role-based permissions."""
 
 import pytest
 
-from agentsquad.broker.squad_manager import SquadManager
-from agentsquad.common.types import SquadRole
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.persistence.database import AsyncDatabase
+from agentwisper.broker.squad_manager import SquadManager
+from agentwisper.common.types import SquadRole
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.persistence.database import AsyncDatabase
 
 
 @pytest.fixture

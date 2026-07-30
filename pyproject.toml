@@ -3,7 +3,7 @@ requires = ["hatchling >= 1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agentsquad"
+name = "agentwisper"
 version = "0.5.0rc1"
 description = "Multi-agent message broker for AI agent coordination via MCP"
 readme = "README.md"
@@ -31,16 +31,16 @@ dependencies = [
 ]
 
 [project.scripts]
-agentsquad-broker = "agentsquad.cli.main:main"
+agentwisper-broker = "agentwisper.cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/jhqian/agentsquad"
-Repository = "https://github.com/jhqian/agentsquad"
-Issues = "https://github.com/jhqian/agentsquad/issues"
-Changelog = "https://github.com/jhqian/agentsquad/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/jhqian/agentwisper"
+Repository = "https://github.com/jhqian/agentwisper"
+Issues = "https://github.com/jhqian/agentwisper/issues"
+Changelog = "https://github.com/jhqian/agentwisper/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentsquad"]
+packages = ["src/agentwisper"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [".agent", ".claude", ".github", "uv.lock", ".python-version"]

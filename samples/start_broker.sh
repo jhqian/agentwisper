@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
-# Start the agentsquad broker.
+# Start the agentwisper broker.
 # Usage: ./start_broker.sh [--host <addr>] [--port <port>]
 #   --host  Host address to bind (default: 127.0.0.1; use 0.0.0.0 for remote access)
 #   --port  HTTP port (default: 8000)
@@ -32,33 +32,33 @@ if ! command -v uv &>/dev/null; then
 fi
 
 if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
-    echo "Error: Cannot find agentsquad project at $PROJECT_ROOT"
+    echo "Error: Cannot find agentwisper project at $PROJECT_ROOT"
     exit 1
 fi
 
-echo "Starting agentsquad broker on ${BROKER_HOST}:${BROKER_PORT} ..."
+echo "Starting agentwisper broker on ${BROKER_HOST}:${BROKER_PORT} ..."
 echo "Broker URL: http://${BROKER_HOST}:${BROKER_PORT}/mcp"
 echo "Press Ctrl+C to stop."
 echo ""
-echo "To connect agents, install the agentsquad plugin and run Claude Code:"
-echo "  claude plugin add <marketplace>/agentsquad"
+echo "To connect agents, install the agentwisper plugin and run Claude Code:"
+echo "  claude plugin add <marketplace>/agentwisper"
 echo "  claude"
 echo ""
 echo "Available commands (type in Claude Code after plugin install):"
-echo "  /agentsquad:register <name>   /agentsquad:send <recipient> <msg>"
-echo "  /agentsquad:poll [all]         /agentsquad:wait [timeout]"
-echo "  /agentsquad:squad <name>      /agentsquad:invite <agent> [role]"
-echo "  /agentsquad:broadcast <topic> <msg>"
-echo "  /agentsquad:subscribe <topic> /agentsquad:status [agents]"
+echo "  /agentwisper:register <name>   /agentwisper:send <recipient> <msg>"
+echo "  /agentwisper:poll [all]         /agentwisper:wait [timeout]"
+echo "  /agentwisper:squad <name>      /agentwisper:invite <agent> [role]"
+echo "  /agentwisper:broadcast <topic> <msg>"
+echo "  /agentwisper:subscribe <topic> /agentwisper:status [agents]"
 echo ""
 
 # Clean up any stale DB from previous runs
-DB_PATH="/tmp/agentsquad_demo.db"
+DB_PATH="/tmp/agentwisper_demo.db"
 if [ -f "$DB_PATH" ]; then
     rm "$DB_PATH"
 fi
 
-export AGENTSQUAD_DB_PATH="$DB_PATH"
+export AGENTWHISPER_DB_PATH="$DB_PATH"
 export PYTHONUNBUFFERED="1"
 
 cleanup() {
@@ -71,4 +71,4 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$PROJECT_ROOT"
-uv run agentsquad-broker start --port "$BROKER_PORT" --host "$BROKER_HOST"
+uv run agentwisper-broker start --port "$BROKER_PORT" --host "$BROKER_HOST"

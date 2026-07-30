@@ -3,8 +3,8 @@
 """Tests for AgentRegistry business logic layer."""
 
 import pytest
-from agentsquad.broker.agent_registry import AgentRegistry
-from agentsquad.persistence.database import AsyncDatabase
+from agentwisper.broker.agent_registry import AgentRegistry
+from agentwisper.persistence.database import AsyncDatabase
 
 
 @pytest.fixture

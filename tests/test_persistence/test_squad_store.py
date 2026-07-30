@@ -1,11 +1,11 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 #
 # Licensed under the Apache License, Version 2.0
 
 import pytest
-from agentsquad.persistence.squad_store import SquadStore
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.common.types import SquadRole
+from agentwisper.persistence.squad_store import SquadStore
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.common.types import SquadRole
 
 
 @pytest.fixture

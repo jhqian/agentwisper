@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 #
 # Licensed under the Apache License, Version 2.0
 
@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.persistence.team_store import TeamStore
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.persistence.team_store import TeamStore
 
 
 class TeamManager:

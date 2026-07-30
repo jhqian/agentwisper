@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Squad manager enforcing role-based permissions for squad operations."""
@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from agentsquad.common.types import SquadRole
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.persistence.squad_store import SquadStore
+from agentwisper.common.types import SquadRole
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.persistence.squad_store import SquadStore
 
 
 class SquadManager:

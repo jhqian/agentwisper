@@ -1,12 +1,12 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for MessageStore CRUD, delivery log fan-out, and query capabilities."""
 
 import pytest
-from agentsquad.persistence.message_store import MessageStore
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.common.types import MessageType, MessageStatus
+from agentwisper.persistence.message_store import MessageStore
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.common.types import MessageType, MessageStatus
 
 
 @pytest.fixture

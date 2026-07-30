@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Broker core orchestrator wiring all components together."""
@@ -9,18 +9,18 @@ import anyio
 import json
 import logging
 
-from agentsquad.common.version import get_version
+from agentwisper.common.version import get_version
 from datetime import datetime, timezone
 from typing import Any
 
-from agentsquad.broker.agent_registry import AgentRegistry
-from agentsquad.broker.router import MessageRouter
-from agentsquad.broker.squad_manager import SquadManager
-from agentsquad.broker.team_manager import TeamManager
-from agentsquad.common.config import BrokerConfig
-from agentsquad.common.types import MessageType
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.persistence.subscription_store import SubscriptionStore
+from agentwisper.broker.agent_registry import AgentRegistry
+from agentwisper.broker.router import MessageRouter
+from agentwisper.broker.squad_manager import SquadManager
+from agentwisper.broker.team_manager import TeamManager
+from agentwisper.common.config import BrokerConfig
+from agentwisper.common.types import MessageType
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.persistence.subscription_store import SubscriptionStore
 
 logger = logging.getLogger(__name__)
 

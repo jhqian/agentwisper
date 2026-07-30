@@ -1,10 +1,10 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
-"""Shared pytest fixtures for agentsquad tests."""
+"""Shared pytest fixtures for agentwisper tests."""
 
 import pytest
-from agentsquad.persistence.database import AsyncDatabase
+from agentwisper.persistence.database import AsyncDatabase
 
 
 @pytest.fixture

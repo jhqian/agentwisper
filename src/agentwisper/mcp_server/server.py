@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """MCP Server exposing all broker operations as MCP tools via FastMCP."""
@@ -10,9 +10,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Context
 
-from agentsquad.broker.core import Broker
-from agentsquad.common.config import BrokerConfig, load_config
-from agentsquad.persistence.message_store import MessageStore
+from agentwisper.broker.core import Broker
+from agentwisper.common.config import BrokerConfig, load_config
+from agentwisper.persistence.message_store import MessageStore
 
 # Module-level singleton broker shared across all MCP sessions.
 # The FastMCP lifespan is invoked once per client session (not once per
@@ -78,7 +78,7 @@ async def broker_lifespan(app: FastMCP):
 
 
 mcp = FastMCP(
-    name="agentsquad-broker",
+    name="agentwisper-broker",
     lifespan=broker_lifespan,
 )
 
@@ -105,7 +105,7 @@ async def _resolve_agent(
                     and agent["session_name"] != session_name):
                 raise ValueError(
                     "Session invalidated (agent taken over). Re-register with "
-                    "/agentsquad:register or /agentsquad:reconnect"
+                    "/agentwisper:register or /agentwisper:reconnect"
                 )
         await broker._registry._agent_store.update_last_seen(resolved)
         return resolved
@@ -482,7 +482,7 @@ async def message_get(
     ctx: Context | None = None,
 ) -> dict:
     """Retrieve a single message by its msg_id. Returns the full message record or None if not found."""
-    from agentsquad.persistence.message_store import MessageStore
+    from agentwisper.persistence.message_store import MessageStore
 
     broker = _get_broker(ctx)
     store = MessageStore(broker._db)
@@ -544,7 +544,7 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
 
     import uvicorn
 
-    from agentsquad.common.version import get_version
+    from agentwisper.common.version import get_version
 
     logging.basicConfig(
         level=logging.INFO,
@@ -555,7 +555,7 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
     logging.getLogger("mcp").setLevel(logging.WARNING)
 
     logger = logging.getLogger(__name__)
-    logger.info("agentsquad broker %s starting on %s:%d", get_version(), host, port)
+    logger.info("agentwisper broker %s starting on %s:%d", get_version(), host, port)
 
     mcp.settings.port = port
     mcp.settings.host = host

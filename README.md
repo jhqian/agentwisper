@@ -1,22 +1,22 @@
-# agentsquad
+# agentwisper
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/agentsquad.svg)](https://pypi.org/project/agentsquad/)
+[![PyPI](https://img.shields.io/pypi/v/agentwisper.svg)](https://pypi.org/project/agentwisper/)
 
 ## Overview
 
-agentsquad is a message broker that lets AI agents coordinate through the Model Context Protocol. Any MCP client — Claude Code, Codex, or a custom agent — registers with the broker, discovers active peers, and exchanges messages with no custom protocol or shared runtime. Agents group into persistent squads with role-based membership for long-running work, or ad-hoc teams for cross-squad tasks, and communicate through direct point-to-point messaging, RPC request/response, or topic-based pub/sub. The broker buffers messages for offline agents and restores identity on reconnect, so an agent can drop and resume without losing state or subscriptions. It runs as a single process backed by SQLite in WAL mode and exposes 26 MCP tools across 6 categories over streamable-http, with no external services or message queues to operate.
+agentwisper is a message broker that lets AI agents coordinate through the Model Context Protocol. Any MCP client — Claude Code, Codex, or a custom agent — registers with the broker, discovers active peers, and exchanges messages with no custom protocol or shared runtime. Agents group into persistent squads with role-based membership for long-running work, or ad-hoc teams for cross-squad tasks, and communicate through direct point-to-point messaging, RPC request/response, or topic-based pub/sub. The broker buffers messages for offline agents and restores identity on reconnect, so an agent can drop and resume without losing state or subscriptions. It runs as a single process backed by SQLite in WAL mode and exposes 26 MCP tools across 6 categories over streamable-http, with no external services or message queues to operate.
 
 ## Installation
 
 ```bash
-pip install agentsquad
+pip install agentwisper
 ```
 
 Then start the broker:
 
 ```bash
-agentsquad-broker start
+agentwisper-broker start
 ```
 
 ## Architecture
@@ -63,7 +63,7 @@ agentsquad-broker start
 uv sync
 
 # Start the broker on port 8000
-uv run agentsquad-broker start
+uv run agentwisper-broker start
 ```
 
 For the full walkthrough, see [QUICKSTART.md](QUICKSTART.md).
@@ -72,13 +72,13 @@ For the full walkthrough, see [QUICKSTART.md](QUICKSTART.md).
 
 ### Claude Code (recommended: plugin)
 
-Install the [agentsquad plugin](https://github.com/jhqian/agentsquad-plugin):
+Install the [agentwisper plugin](https://github.com/jhqian/agentwisper-plugin):
 
 ```bash
-claude plugin add <marketplace>/agentsquad
+claude plugin add <marketplace>/agentwisper
 ```
 
-This provides 14 slash commands (`/agentsquad:register`, `/agentsquad:send`, etc.) and connects to the broker automatically.
+This provides 14 slash commands (`/agentwisper:register`, `/agentwisper:send`, etc.) and connects to the broker automatically.
 
 ### Claude Code (manual HTTP config)
 
@@ -87,7 +87,7 @@ Add to `.claude/settings.json` or `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agentsquad-broker": {
+    "agentwisper-broker": {
       "type": "http",
       "url": "http://localhost:8000/mcp"
     }
@@ -98,7 +98,7 @@ Add to `.claude/settings.json` or `.mcp.json`:
 ### Codex
 
 ```bash
-codex mcp add agentsquad-broker --transport streamable_http --url "http://localhost:8000/mcp"
+codex mcp add agentwisper-broker --transport streamable_http --url "http://localhost:8000/mcp"
 ```
 
 ## MCP Tools Reference
@@ -161,15 +161,15 @@ codex mcp add agentsquad-broker --transport streamable_http --url "http://localh
 
 ## Configuration
 
-Environment variables use the `AGENTSQUAD_` prefix:
+Environment variables use the `AGENTWHISPER_` prefix:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENTSQUAD_DB_PATH` | `agentsquad.db` | SQLite database file path |
-| `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
-| `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
-| `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
-| `AGENTSQUAD_HTTP_PORT` | `8000` | Port for streamable-http transport |
+| `AGENTWHISPER_DB_PATH` | `agentwisper.db` | SQLite database file path |
+| `AGENTWHISPER_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
+| `AGENTWHISPER_POLL_LIMIT` | `50` | Max messages returned per poll call |
+| `AGENTWHISPER_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
+| `AGENTWHISPER_HTTP_PORT` | `8000` | Port for streamable-http transport |
 
 ## Communication Patterns
 
@@ -252,7 +252,7 @@ uv run python tests/system_test.py
 ### Project Structure
 
 ```
-agentsquad/
+agentwisper/
   src/
     common/              # Types, config
     persistence/         # Database, stores

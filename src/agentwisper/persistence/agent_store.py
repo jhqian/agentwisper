@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Agent store providing CRUD and lifecycle operations for agents."""
@@ -10,8 +10,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from agentsquad.common.types import AgentStatus
-from agentsquad.persistence.database import AsyncDatabase
+from agentwisper.common.types import AgentStatus
+from agentwisper.persistence.database import AsyncDatabase
 
 
 def _generate_agent_id() -> str:

@@ -1,12 +1,12 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """End-to-end integration tests for agent, squad, and team lifecycle."""
 
 import pytest
 
-from agentsquad.broker.core import Broker
-from agentsquad.common.config import BrokerConfig
+from agentwisper.broker.core import Broker
+from agentwisper.common.config import BrokerConfig
 
 
 @pytest.fixture

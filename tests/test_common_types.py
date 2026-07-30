@@ -1,4 +1,4 @@
-from agentsquad.common.types import (
+from agentwisper.common.types import (
     AgentRecord, AgentStatus, MessageRecord, MessageType, MessageStatus,
     SquadRecord, SquadMembership, SquadRole, TeamRecord, TeamMembership,
     SubscriptionRecord, DeliveryLog

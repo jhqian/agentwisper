@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Message router orchestrating P2P, RPC, and Pub/Sub message routing."""
@@ -8,12 +8,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from agentsquad.common.types import MessageStatus, MessageType, SquadRole
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.persistence.message_store import MessageStore
-from agentsquad.persistence.squad_store import SquadStore
-from agentsquad.persistence.subscription_store import SubscriptionStore
+from agentwisper.common.types import MessageStatus, MessageType, SquadRole
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.persistence.message_store import MessageStore
+from agentwisper.persistence.squad_store import SquadStore
+from agentwisper.persistence.subscription_store import SubscriptionStore
 
 
 class MessageRouter:

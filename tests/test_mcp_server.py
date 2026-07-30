@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Integration-style tests for MCP Server tool functions."""
@@ -6,8 +6,8 @@
 import pytest
 from unittest.mock import MagicMock
 
-from agentsquad.broker.core import Broker
-from agentsquad.common.config import BrokerConfig
+from agentwisper.broker.core import Broker
+from agentwisper.common.config import BrokerConfig
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def mock_context(broker_ctx):
 
 
 async def test_agent_register_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register
+    from agentwisper.mcp_server.server import agent_register
 
     result = await agent_register("test-agent", ["code"], ctx=mock_context)
     assert "agent_id" in result
@@ -42,7 +42,7 @@ async def test_agent_register_tool(mock_context):
 
 
 async def test_agent_lifecycle_tools(mock_context):
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register,
         agent_deregister,
         agent_info,
@@ -65,7 +65,7 @@ async def test_agent_lifecycle_tools(mock_context):
 
 
 async def test_agent_list_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_list
+    from agentwisper.mcp_server.server import agent_register, agent_list
 
     await agent_register("a1", [], ctx=mock_context)
     await agent_register("a2", ["test"], ctx=mock_context)
@@ -75,7 +75,7 @@ async def test_agent_list_tool(mock_context):
 
 
 async def test_agent_deregister_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_info, agent_reconnect
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_info, agent_reconnect
 
     reg = await agent_register("x", [], ctx=mock_context)
     result = await agent_deregister(reg["agent_id"], ctx=mock_context)
@@ -89,7 +89,7 @@ async def test_agent_deregister_tool(mock_context):
 
 
 async def test_agent_register_with_session_name(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_info
+    from agentwisper.mcp_server.server import agent_register, agent_info
 
     result = await agent_register("dev", ["code"], session_name="sess_abc", ctx=mock_context)
     assert result["status"] == "active"
@@ -98,7 +98,7 @@ async def test_agent_register_with_session_name(mock_context):
 
 
 async def test_agent_reconnect_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect, agent_info
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect, agent_info
 
     reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
     await agent_deregister(reg["agent_id"], ctx=mock_context)
@@ -110,14 +110,14 @@ async def test_agent_reconnect_tool(mock_context):
 
 
 async def test_agent_reconnect_not_found(mock_context):
-    from agentsquad.mcp_server.server import agent_reconnect
+    from agentwisper.mcp_server.server import agent_reconnect
 
     with pytest.raises(ValueError, match="never been registered or may have expired"):
         await agent_reconnect("nonexistent", session_name="sess_1", ctx=mock_context)
 
 
 async def test_agent_reconnect_while_active(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_reconnect, agent_info
+    from agentwisper.mcp_server.server import agent_register, agent_reconnect, agent_info
 
     reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
     # Reconnect without deregistering -- agent is still active
@@ -129,7 +129,7 @@ async def test_agent_reconnect_while_active(mock_context):
 
 
 async def test_agent_reconnect_with_credentials(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect
 
     reg = await agent_register("dev", ["code"], session_name="old", ctx=mock_context)
     agent_id = reg["agent_id"]
@@ -142,7 +142,7 @@ async def test_agent_reconnect_with_credentials(mock_context):
 
 
 async def test_agent_reconnect_wrong_credentials(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect
 
     reg = await agent_register("dev", ["code"], ctx=mock_context)
     await agent_deregister(reg["agent_id"], ctx=mock_context)
@@ -153,7 +153,7 @@ async def test_agent_reconnect_wrong_credentials(mock_context):
 
 
 async def test_agent_reconnect_no_agent_id_legacy(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect
 
     reg = await agent_register("dev", ["code"], ctx=mock_context)
     await agent_deregister(reg["agent_id"], ctx=mock_context)
@@ -163,8 +163,8 @@ async def test_agent_reconnect_no_agent_id_legacy(mock_context):
 
 async def test_resolve_agent_session_check(mock_context):
     """_resolve_agent raises ValueError when session_name mismatches."""
-    from agentsquad.mcp_server.server import _resolve_agent, _get_broker
-    from agentsquad.mcp_server.server import agent_register, agent_reconnect
+    from agentwisper.mcp_server.server import _resolve_agent, _get_broker
+    from agentwisper.mcp_server.server import agent_register, agent_reconnect
 
     broker = _get_broker(mock_context)
     reg = await agent_register("dev", ["code"], session_name="sess_old", ctx=mock_context)
@@ -183,8 +183,8 @@ async def test_resolve_agent_session_check(mock_context):
 
 async def test_resolve_agent_any_status_no_auto_restore(mock_context):
     """_resolve_agent_any_status does NOT auto-restore disconnected agents."""
-    from agentsquad.mcp_server.server import _resolve_agent_any_status, _get_broker
-    from agentsquad.mcp_server.server import agent_register, agent_deregister
+    from agentwisper.mcp_server.server import _resolve_agent_any_status, _get_broker
+    from agentwisper.mcp_server.server import agent_register, agent_deregister
 
     broker = _get_broker(mock_context)
     reg = await agent_register("dev", ["code"], ctx=mock_context)
@@ -204,14 +204,14 @@ async def test_resolve_agent_any_status_no_auto_restore(mock_context):
 
 
 async def test_resolve_agent_raises_for_nonexistent(mock_context):
-    from agentsquad.mcp_server.server import _resolve_agent, message_send
+    from agentwisper.mcp_server.server import _resolve_agent, message_send
 
     with pytest.raises(ValueError, match="not found"):
         await _resolve_agent(mock_context.request_context.lifespan_context, "ghost")
 
 
 async def test_message_send_sender_not_found(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send
+    from agentwisper.mcp_server.server import agent_register, message_send
 
     r = await agent_register("receiver", [], ctx=mock_context)
     with pytest.raises(ValueError, match="not found"):
@@ -219,35 +219,35 @@ async def test_message_send_sender_not_found(mock_context):
 
 
 async def test_message_poll_agent_not_found(mock_context):
-    from agentsquad.mcp_server.server import message_poll
+    from agentwisper.mcp_server.server import message_poll
 
     with pytest.raises(ValueError, match="not found"):
         await message_poll("nonexistent", ctx=mock_context)
 
 
 async def test_message_wait_agent_not_found(mock_context):
-    from agentsquad.mcp_server.server import message_wait
+    from agentwisper.mcp_server.server import message_wait
 
     with pytest.raises(ValueError, match="not found"):
         await message_wait("nonexistent", timeout=0, ctx=mock_context)
 
 
 async def test_topic_subscribe_agent_not_found(mock_context):
-    from agentsquad.mcp_server.server import topic_subscribe
+    from agentwisper.mcp_server.server import topic_subscribe
 
     with pytest.raises(ValueError, match="not found"):
         await topic_subscribe("nonexistent", "alerts", ctx=mock_context)
 
 
 async def test_agent_info_returns_none_for_nonexistent(mock_context):
-    from agentsquad.mcp_server.server import agent_info
+    from agentwisper.mcp_server.server import agent_info
 
     result = await agent_info("nonexistent", ctx=mock_context)
     assert result is None
 
 
 async def test_agent_deregister_not_found(mock_context):
-    from agentsquad.mcp_server.server import agent_deregister
+    from agentwisper.mcp_server.server import agent_deregister
 
     with pytest.raises(ValueError, match="not found"):
         await agent_deregister("nonexistent", ctx=mock_context)
@@ -259,7 +259,7 @@ async def test_agent_deregister_not_found(mock_context):
 
 
 async def test_reconnect_before_message_send(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect, message_send, agent_info
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect, message_send, agent_info
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -282,7 +282,7 @@ async def test_reconnect_before_message_send(mock_context):
 
 
 async def test_reconnect_before_message_poll(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_poll, agent_deregister, agent_reconnect, agent_info
+    from agentwisper.mcp_server.server import agent_register, message_send, message_poll, agent_deregister, agent_reconnect, agent_info
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -305,7 +305,7 @@ async def test_reconnect_before_message_poll(mock_context):
 
 
 async def test_reconnect_before_subscribe(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, agent_reconnect, topic_subscribe, agent_info
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, agent_reconnect, topic_subscribe, agent_info
 
     reg = await agent_register("sub", [], ctx=mock_context)
     await agent_deregister(reg["agent_id"], ctx=mock_context)
@@ -325,7 +325,7 @@ async def test_reconnect_before_subscribe(mock_context):
 
 async def test_reconnect_preserves_squad_after_broker_restart(mock_context):
     """Simulate broker restart: agent marked disconnected, reconnect preserves squad."""
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register, squad_create, squad_join, squad_info, agent_info, agent_reconnect,
     )
 
@@ -339,7 +339,7 @@ async def test_reconnect_preserves_squad_after_broker_restart(mock_context):
 
     # Simulate broker restart by directly disconnecting in DB (no resource cleanup)
     broker = mock_context.request_context.lifespan_context
-    from agentsquad.common.types import AgentStatus
+    from agentwisper.common.types import AgentStatus
     await broker._registry._agent_store.update_status(member["agent_id"], AgentStatus.DISCONNECTED)
 
     # Reconnect with credentials restores the agent
@@ -355,7 +355,7 @@ async def test_reconnect_preserves_squad_after_broker_restart(mock_context):
 
 
 async def test_send_to_disconnected_by_name_buffers(mock_context):
-    from agentsquad.mcp_server.server import agent_register, agent_deregister, message_send, message_poll
+    from agentwisper.mcp_server.server import agent_register, agent_deregister, message_send, message_poll
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -379,7 +379,7 @@ async def test_send_to_disconnected_by_name_buffers(mock_context):
 
 
 async def test_squad_tools(mock_context):
-    from agentsquad.mcp_server.server import agent_register, squad_create, squad_info
+    from agentwisper.mcp_server.server import agent_register, squad_create, squad_info
 
     reg = await agent_register("leader", [], ctx=mock_context)
     squad = await squad_create("dev-team", reg["agent_id"], ctx=mock_context)
@@ -391,7 +391,7 @@ async def test_squad_tools(mock_context):
 
 
 async def test_squad_join_leave(mock_context):
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register,
         squad_create,
         squad_join,
@@ -418,7 +418,7 @@ async def test_squad_join_leave(mock_context):
 
 
 async def test_squad_list_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, squad_create, squad_list
+    from agentwisper.mcp_server.server import agent_register, squad_create, squad_list
 
     reg = await agent_register("l", [], ctx=mock_context)
     await squad_create("s1", reg["agent_id"], ctx=mock_context)
@@ -434,7 +434,7 @@ async def test_squad_list_tool(mock_context):
 
 
 async def test_team_form_and_info(mock_context):
-    from agentsquad.mcp_server.server import agent_register, team_form, team_info
+    from agentwisper.mcp_server.server import agent_register, team_form, team_info
 
     a1 = await agent_register("t1", [], ctx=mock_context)
     a2 = await agent_register("t2", [], ctx=mock_context)
@@ -449,7 +449,7 @@ async def test_team_form_and_info(mock_context):
 
 
 async def test_team_dismiss(mock_context):
-    from agentsquad.mcp_server.server import agent_register, team_form, team_dismiss
+    from agentwisper.mcp_server.server import agent_register, team_form, team_dismiss
 
     a1 = await agent_register("t1", [], ctx=mock_context)
     a2 = await agent_register("t2", [], ctx=mock_context)
@@ -460,7 +460,7 @@ async def test_team_dismiss(mock_context):
 
 
 async def test_team_list_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, team_form, team_list
+    from agentwisper.mcp_server.server import agent_register, team_form, team_list
 
     a1 = await agent_register("t1", [], ctx=mock_context)
     a2 = await agent_register("t2", [], ctx=mock_context)
@@ -476,7 +476,7 @@ async def test_team_list_tool(mock_context):
 
 
 async def test_message_send_and_poll(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_poll
+    from agentwisper.mcp_server.server import agent_register, message_send, message_poll
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -494,7 +494,7 @@ async def test_message_send_and_poll(mock_context):
 
 
 async def test_message_broadcast_tool(mock_context):
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register,
         topic_subscribe,
         message_broadcast,
@@ -516,7 +516,7 @@ async def test_message_broadcast_tool(mock_context):
 
 
 async def test_message_query_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_query
+    from agentwisper.mcp_server.server import agent_register, message_send, message_query
 
     r1 = await agent_register("s", [], ctx=mock_context)
     r2 = await agent_register("r", [], ctx=mock_context)
@@ -529,7 +529,7 @@ async def test_message_query_tool(mock_context):
 
 
 async def test_message_get_tool(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_get
+    from agentwisper.mcp_server.server import agent_register, message_send, message_get
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("recver", [], ctx=mock_context)
@@ -554,7 +554,7 @@ async def test_message_get_tool(mock_context):
 
 
 async def test_topic_subscribe_unsubscribe(mock_context):
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register,
         topic_subscribe,
         topic_unsubscribe,
@@ -574,7 +574,7 @@ async def test_topic_subscribe_unsubscribe(mock_context):
 
 
 async def test_broker_status_tool(mock_context):
-    from agentsquad.mcp_server.server import broker_status
+    from agentwisper.mcp_server.server import broker_status
 
     result = await broker_status(ctx=mock_context)
     assert result["status"] == "healthy"
@@ -582,7 +582,7 @@ async def test_broker_status_tool(mock_context):
 
 async def test_message_wait_receives_message(mock_context):
     import asyncio
-    from agentsquad.mcp_server.server import agent_register, message_send, message_wait
+    from agentwisper.mcp_server.server import agent_register, message_send, message_wait
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -601,7 +601,7 @@ async def test_message_wait_receives_message(mock_context):
 
 
 async def test_message_wait_returns_immediately_if_pending(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_wait
+    from agentwisper.mcp_server.server import agent_register, message_send, message_wait
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("receiver", [], ctx=mock_context)
@@ -614,7 +614,7 @@ async def test_message_wait_returns_immediately_if_pending(mock_context):
 
 
 async def test_message_wait_timeout(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_wait
+    from agentwisper.mcp_server.server import agent_register, message_wait
 
     r = await agent_register("lonely", [], ctx=mock_context)
 
@@ -629,7 +629,7 @@ async def test_message_wait_timeout(mock_context):
 
 
 def test_create_server_returns_fastmcp():
-    from agentsquad.mcp_server.server import create_server
+    from agentwisper.mcp_server.server import create_server
     from mcp.server.fastmcp import FastMCP
 
     server = create_server()
@@ -637,18 +637,18 @@ def test_create_server_returns_fastmcp():
 
 
 def test_mcp_instance_has_tools():
-    from agentsquad.mcp_server.server import mcp
+    from agentwisper.mcp_server.server import mcp
 
     # FastMCP stores tool functions internally; verify the module-level
     # functions are importable and the mcp object exists.
     assert mcp is not None
-    assert mcp.name == "agentsquad-broker"
+    assert mcp.name == "agentwisper-broker"
 
 
 def test_run_server_sets_host_and_port():
     from unittest.mock import AsyncMock, patch
 
-    from agentsquad.mcp_server.server import run_server
+    from agentwisper.mcp_server.server import run_server
 
     with patch("uvicorn.Server") as mock_server_cls, \
          patch("uvicorn.Config") as mock_config_cls:
@@ -664,7 +664,7 @@ def test_run_server_sets_host_and_port():
 
 
 async def test_message_send_with_client_msg_id(mock_context):
-    from agentsquad.mcp_server.server import agent_register, message_send, message_get
+    from agentwisper.mcp_server.server import agent_register, message_send, message_get
 
     r1 = await agent_register("sender", [], ctx=mock_context)
     r2 = await agent_register("recver", [], ctx=mock_context)
@@ -682,7 +682,7 @@ async def test_message_send_with_client_msg_id(mock_context):
 
 
 async def test_message_broadcast_with_client_msg_id(mock_context):
-    from agentsquad.mcp_server.server import (
+    from agentwisper.mcp_server.server import (
         agent_register,
         topic_subscribe,
         message_broadcast,

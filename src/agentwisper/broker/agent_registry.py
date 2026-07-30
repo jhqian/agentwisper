@@ -7,10 +7,10 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.persistence.message_store import MessageStore
-from agentsquad.common.types import AgentStatus
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.persistence.message_store import MessageStore
+from agentwisper.common.types import AgentStatus
 
 
 class AgentRegistry:
@@ -113,7 +113,7 @@ class AgentRegistry:
             if agent is None:
                 raise ValueError(
                     f"Agent '{agent_id}' not found. Your previous identity may have "
-                    f"expired. Use /agentsquad:register to create a new identity."
+                    f"expired. Use /agentwisper:register to create a new identity."
                 )
             if agent["name"] != name:
                 raise ValueError(

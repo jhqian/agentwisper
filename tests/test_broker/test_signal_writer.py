@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for SignalWriter atomic signal file operations."""
@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from agentsquad.broker.signal_writer import SignalWriter
+from agentwisper.broker.signal_writer import SignalWriter
 
 
 @pytest.fixture

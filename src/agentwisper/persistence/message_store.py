@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Message store providing CRUD, delivery log fan-out, and query operations."""
@@ -9,8 +9,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from agentsquad.persistence.database import AsyncDatabase
-from agentsquad.common.types import MessageType, MessageStatus
+from agentwisper.persistence.database import AsyncDatabase
+from agentwisper.common.types import MessageType, MessageStatus
 
 
 def _generate_msg_id() -> str:

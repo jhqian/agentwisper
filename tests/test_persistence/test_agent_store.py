@@ -1,11 +1,11 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for AgentStore CRUD and lifecycle operations."""
 
 import pytest
-from agentsquad.persistence.agent_store import AgentStore
-from agentsquad.common.types import AgentStatus
+from agentwisper.persistence.agent_store import AgentStore
+from agentwisper.common.types import AgentStatus
 
 
 @pytest.fixture

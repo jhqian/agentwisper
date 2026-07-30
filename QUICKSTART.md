@@ -1,4 +1,4 @@
-<!-- Copyright 2026 agentsquad contributors, Licensed under the Apache License, Version 2.0 -->
+<!-- Copyright 2026 agentwisper contributors, Licensed under the Apache License, Version 2.0 -->
 
 # Quick Start Guide
 
@@ -13,8 +13,8 @@
 ## Installation
 
 ```bash
-git clone <repo-url> agentsquad
-cd agentsquad
+git clone <repo-url> agentwisper
+cd agentwisper
 uv sync
 ```
 
@@ -31,18 +31,18 @@ The broker exposes 26 MCP tools via streamable-http transport. In AI-powered cli
 
 ### Claude Code (with Plugin)
 
-Install the agentsquad plugin to get MCP connection + slash commands:
+Install the agentwisper plugin to get MCP connection + slash commands:
 
 ```bash
-claude plugin marketplace add /path/to/agentsquad-plugin
-claude plugin install agentsquad
+claude plugin marketplace add /path/to/agentwisper-plugin
+claude plugin install agentwisper
 ```
 
 Then start the broker in a separate terminal:
 
 ```bash
-cd agentsquad
-uv run agentsquad-broker start --port 8000
+cd agentwisper
+uv run agentwisper-broker start --port 8000
 ```
 
 Now in Claude Code, type:
@@ -61,23 +61,23 @@ Available slash commands (provided by the plugin):
 
 | Command | Description |
 |---------|-------------|
-| `/agentsquad:register <name>` | Register as an agent |
-| `/agentsquad:send <recipient> <msg>` | Send P2P message |
-| `/agentsquad:sendwait <recipient> <msg> [timeout]` | Send and wait for reply (default 1h) |
-| `/agentsquad:poll [all]` | Poll unread messages (or include read with "all") |
-| `/agentsquad:wait [timeout]` | Block until messages arrive |
-| `/agentsquad:squad <name>` | Create a squad |
-| `/agentsquad:invite <agent> [role]` | Invite agent to squad |
-| `/agentsquad:broadcast <topic> <msg>` | Broadcast to topic |
-| `/agentsquad:subscribe <topic>` | Subscribe to topic |
-| `/agentsquad:status [agents]` | Check broker status |
+| `/agentwisper:register <name>` | Register as an agent |
+| `/agentwisper:send <recipient> <msg>` | Send P2P message |
+| `/agentwisper:sendwait <recipient> <msg> [timeout]` | Send and wait for reply (default 1h) |
+| `/agentwisper:poll [all]` | Poll unread messages (or include read with "all") |
+| `/agentwisper:wait [timeout]` | Block until messages arrive |
+| `/agentwisper:squad <name>` | Create a squad |
+| `/agentwisper:invite <agent> [role]` | Invite agent to squad |
+| `/agentwisper:broadcast <topic> <msg>` | Broadcast to topic |
+| `/agentwisper:subscribe <topic>` | Subscribe to topic |
+| `/agentwisper:status [agents]` | Check broker status |
 
 ### Claude Code (Manual MCP Config)
 
 If you prefer not to use the plugin, add the MCP server manually:
 
 ```bash
-claude mcp add --transport http agentsquad-broker http://localhost:8000/mcp
+claude mcp add --transport http agentwisper-broker http://localhost:8000/mcp
 ```
 
 Or create `.mcp.json` in your project root:
@@ -85,7 +85,7 @@ Or create `.mcp.json` in your project root:
 ```json
 {
   "mcpServers": {
-    "agentsquad-broker": {
+    "agentwisper-broker": {
       "type": "http",
       "url": "http://localhost:8000/mcp"
     }
@@ -118,7 +118,7 @@ Multiple agents connect to a single broker over HTTP.
 **1. Start the broker**:
 
 ```bash
-uv run agentsquad-broker start --port 8000
+uv run agentwisper-broker start --port 8000
 ```
 
 The broker binds to `http://localhost:8000/mcp`.
@@ -128,7 +128,7 @@ The broker binds to `http://localhost:8000/mcp`.
 Claude Code (from each agent's project directory):
 
 ```bash
-claude mcp add --transport http agentsquad-broker http://localhost:8000/mcp
+claude mcp add --transport http agentwisper-broker http://localhost:8000/mcp
 ```
 
 OpenCode:
@@ -136,7 +136,7 @@ OpenCode:
 ```json
 {
   "mcp": {
-    "agentsquad-broker": {
+    "agentwisper-broker": {
       "type": "remote",
       "url": "http://localhost:8000/mcp"
     }
@@ -147,7 +147,7 @@ OpenCode:
 Codex:
 
 ```bash
-codex mcp add agentsquad-broker --transport streamable_http --url "http://localhost:8000/mcp"
+codex mcp add agentwisper-broker --transport streamable_http --url "http://localhost:8000/mcp"
 ```
 
 **3. Register agents** from each client:
@@ -164,7 +164,7 @@ Try the complete multi-agent workflow with two Claude Code instances:
 
 ```bash
 # Terminal 1: Start the broker
-cd agentsquad
+cd agentwisper
 ./samples/start_broker.sh
 
 # Terminal 2: Start Agent A (with plugin installed)
@@ -401,25 +401,25 @@ tests/
 
 ## Configuration
 
-Environment variables use the `AGENTSQUAD_` prefix:
+Environment variables use the `AGENTWHISPER_` prefix:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENTSQUAD_DB_PATH` | `agentsquad.db` | SQLite database file path |
-| `AGENTSQUAD_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
-| `AGENTSQUAD_POLL_LIMIT` | `50` | Max messages returned per poll call |
-| `AGENTSQUAD_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
-| `AGENTSQUAD_HTTP_PORT` | `8000` | Port for streamable-http transport |
+| `AGENTWHISPER_DB_PATH` | `agentwisper.db` | SQLite database file path |
+| `AGENTWHISPER_RPC_TIMEOUT` | `30` | Seconds to wait for RPC response |
+| `AGENTWHISPER_POLL_LIMIT` | `50` | Max messages returned per poll call |
+| `AGENTWHISPER_RETENTION_DAYS` | `30` | Days to retain messages before cleanup |
+| `AGENTWHISPER_HTTP_PORT` | `8000` | Port for streamable-http transport |
 
 ## Troubleshooting
 
 **Cannot connect to broker**
 
-Verify the broker is running and the port matches: `curl http://localhost:8000/mcp`. Check `AGENTSQUAD_HTTP_PORT` and that no other process occupies the port.
+Verify the broker is running and the port matches: `curl http://localhost:8000/mcp`. Check `AGENTWHISPER_HTTP_PORT` and that no other process occupies the port.
 
 **MCP server not appearing in Claude Code**
 
-Claude Code reads MCP server configuration from `.mcp.json` in the project root. Use `claude mcp add` or install the agentsquad plugin. Run `/mcp` to verify the server is listed.
+Claude Code reads MCP server configuration from `.mcp.json` in the project root. Use `claude mcp add` or install the agentwisper plugin. Run `/mcp` to verify the server is listed.
 
 **Observer cannot send messages**
 

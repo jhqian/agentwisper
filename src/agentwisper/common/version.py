@@ -1,4 +1,4 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Broker version information.
@@ -22,7 +22,7 @@ def get_version() -> str:
     Falls back to package version alone when git info is unavailable.
     """
     try:
-        pkg_version = version("agentsquad")
+        pkg_version = version("agentwisper")
     except PackageNotFoundError:
         pkg_version = "0.0.0"
 

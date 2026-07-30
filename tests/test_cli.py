@@ -1,18 +1,18 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Tests for CLI entry point."""
 
 from click.testing import CliRunner
 
-from agentsquad.cli.main import cli
+from agentwisper.cli.main import cli
 
 
 def test_cli_help():
     runner = CliRunner()
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "Vibe AgentSquad" in result.output
+    assert "Vibe AgentWhisper" in result.output
 
 
 def test_start_help():

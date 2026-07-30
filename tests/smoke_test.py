@@ -1,10 +1,10 @@
-# Copyright 2026 agentsquad contributors
+# Copyright 2026 agentwisper contributors
 # Licensed under the Apache License, Version 2.0
 
 """Smoke test: start a real broker subprocess and validate MCP tools.
 
 Usage:
-    cd /path/to/agentsquad && uv run python tests/smoke_test.py
+    cd /path/to/agentwisper && uv run python tests/smoke_test.py
 """
 
 from __future__ import annotations
@@ -259,14 +259,14 @@ async def run_tests() -> None:
         os.remove(DB_PATH)
 
     env = os.environ.copy()
-    env["AGENTSQUAD_DB_PATH"] = DB_PATH
+    env["AGENTWHISPER_DB_PATH"] = DB_PATH
 
     print(f"Starting broker on port {PORT} ...")
     proc = subprocess.Popen(
         [
             sys.executable,
             "-c",
-            "from agentsquad.mcp_server.server import run_server; run_server(8199)",
+            "from agentwisper.mcp_server.server import run_server; run_server(8199)",
         ],
         cwd=project_root,
         env=env,
