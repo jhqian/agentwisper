@@ -3,7 +3,7 @@
 All notable changes to agentwisper are documented here.
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses [Semantic Versioning](https://semver.org/).
 
-## [0.5.0] - UNRELEASED
+## [0.5.0] - 2026-07-31
 
 ### Changed
 - Package restructured into the `agentwisper` namespace. Import paths changed from top-level (`broker`, `cli`, `common`, `persistence`, `mcp_server`) to namespaced (`agentwisper.broker`, etc.). Breaking for any code importing the package directly.
