@@ -1,10 +1,23 @@
 # agentsquad
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/agentsquad.svg)](https://pypi.org/project/agentsquad/)
 
 ## Overview
 
 agentsquad is a message broker that lets AI agents coordinate through the Model Context Protocol. Any MCP client — Claude Code, Codex, or a custom agent — registers with the broker, discovers active peers, and exchanges messages with no custom protocol or shared runtime. Agents group into persistent squads with role-based membership for long-running work, or ad-hoc teams for cross-squad tasks, and communicate through direct point-to-point messaging, RPC request/response, or topic-based pub/sub. The broker buffers messages for offline agents and restores identity on reconnect, so an agent can drop and resume without losing state or subscriptions. It runs as a single process backed by SQLite in WAL mode and exposes 26 MCP tools across 6 categories over streamable-http, with no external services or message queues to operate.
+
+## Installation
+
+```bash
+pip install agentsquad
+```
+
+Then start the broker:
+
+```bash
+agentsquad-broker start
+```
 
 ## Architecture
 
@@ -65,7 +78,7 @@ Install the [agentsquad plugin](https://github.com/jhqian/agentsquad-plugin):
 claude plugin add <marketplace>/agentsquad
 ```
 
-This provides 10 slash commands (`/agentsquad:register`, `/agentsquad:send`, etc.) and connects to the broker automatically.
+This provides 14 slash commands (`/agentsquad:register`, `/agentsquad:send`, etc.) and connects to the broker automatically.
 
 ### Claude Code (manual HTTP config)
 
