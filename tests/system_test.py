@@ -96,11 +96,11 @@ async def check_agent_state_transitions(
         str(dereg_res),
     )
 
-    # agent_info auto-restores disconnected agents
+    # agent_info does not auto-restore disconnected agents; reconnect is explicit
     info_c = await call_tool(session, "agent_info", {"agent_id": c})
     report(
-        "state: gamma auto-restored to active",
-        info_c is not None and info_c.get("status") == "active",
+        "state: gamma stays disconnected (no auto-restore)",
+        info_c is not None and info_c.get("status") == "disconnected",
         str(info_c.get("status") if info_c else None),
     )
 
