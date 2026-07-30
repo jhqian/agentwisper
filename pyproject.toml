@@ -1,24 +1,52 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
 [project]
 name = "agentsquad"
-version = "0.4.0"
-description = "Multi-agent communication platform"
+version = "0.5.0rc1"
+description = "Multi-agent message broker for AI agent coordination via MCP"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICEN[CS]E*"]
+authors = [{ name = "Ryan QIAN", email = "jianghao.qian@outlook.com" }]
+keywords = ["multi-agent", "mcp", "message-broker", "agent-communication", "claude-code"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "mcp[cli]>=1.0",
     "pydantic>=2.12",
     "click",
+    "anyio",      # direct top-level import in broker/core.py (currently transitive via mcp)
+    "uvicorn",    # direct lazy import in mcp_server/server.py (currently transitive via mcp)
 ]
 
 [project.scripts]
-agentsquad-broker = "cli.main:main"
+agentsquad-broker = "agentsquad.cli.main:main"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[project.urls]
+Homepage = "https://github.com/jhqian/agentsquad"
+Repository = "https://github.com/jhqian/agentsquad"
+Issues = "https://github.com/jhqian/agentsquad/issues"
+Changelog = "https://github.com/jhqian/agentsquad/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cli", "src/broker", "src/common", "src/persistence", "src/mcp_server"]
+packages = ["src/agentsquad"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [".agent", ".claude", ".github", "uv.lock", ".python-version"]
+
+[project.optional-dependencies]
+# (none currently; reserved)
 
 [dependency-groups]
 dev = [

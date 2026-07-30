@@ -4,12 +4,14 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "agentsquad"
-version = "0.4.0"
+version = "0.5.0rc1"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "click" },
     { name = "mcp", extra = ["cli"] },
     { name = "pydantic" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -20,9 +22,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio" },
     { name = "click" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0" },
     { name = "pydantic", specifier = ">=2.12" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata.requires-dev]
