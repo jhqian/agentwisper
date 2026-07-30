@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "mcp[cli]>=1.0",
+    "mcp[cli]>=1.0,<2.0",  # 2.x drops the FastMCP API and renames the client helpers
     "pydantic>=2.12",
     "click",
     "anyio",      # direct top-level import in broker/core.py (currently transitive via mcp)
