@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from broker.core import Broker
-from common.config import BrokerConfig
+from agentsquad.broker.core import Broker
+from agentsquad.common.config import BrokerConfig
 
 
 @pytest.fixture
@@ -236,7 +236,7 @@ async def test_broker_cleanup_removes_expired_agents(tmp_path):
     # Manually age the disconnected_at timestamp
     from datetime import datetime, timezone, timedelta
     old_time = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
-    from persistence.database import AsyncDatabase
+    from agentsquad.persistence.database import AsyncDatabase
     await b._db.execute(
         "UPDATE agents SET disconnected_at = ? WHERE agent_id = ?",
         (old_time, result["agent_id"]),

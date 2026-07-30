@@ -4,12 +4,12 @@
 """Tests for MessageRouter P2P, RPC, and Pub/Sub message routing."""
 
 import pytest
-from broker.router import MessageRouter
-from persistence.database import AsyncDatabase
-from persistence.agent_store import AgentStore
-from persistence.squad_store import SquadStore
-from persistence.subscription_store import SubscriptionStore
-from common.types import MessageType
+from agentsquad.broker.router import MessageRouter
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.squad_store import SquadStore
+from agentsquad.persistence.subscription_store import SubscriptionStore
+from agentsquad.common.types import MessageType
 
 
 @pytest.fixture
@@ -137,7 +137,7 @@ async def test_poll_auto_acknowledges_direct_message(router, agent_store):
 async def test_send_to_disconnected_agent_buffers(router, agent_store):
     sender = await agent_store.create(name="sender", capabilities=[])
     receiver = await agent_store.create(name="receiver", capabilities=[])
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
     result = await router.send_message(
         sender_id=sender, recipient=receiver,
@@ -154,7 +154,7 @@ async def test_send_to_disconnected_agent_buffers(router, agent_store):
 async def test_send_to_disconnected_by_name_buffers(router, agent_store):
     sender = await agent_store.create(name="sender", capabilities=[])
     receiver = await agent_store.create(name="alice", capabilities=[])
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
     result = await router.send_message(
         sender_id=sender, recipient="alice",
@@ -167,7 +167,7 @@ async def test_send_to_disconnected_by_name_buffers(router, agent_store):
 async def test_rpc_to_disconnected_agent_buffers(router, agent_store):
     caller = await agent_store.create(name="caller", capabilities=[])
     worker = await agent_store.create(name="worker", capabilities=[])
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     await agent_store.update_status(worker, AgentStatus.DISCONNECTED)
     result = await router.send_message(
         sender_id=caller, recipient=worker,
@@ -194,7 +194,7 @@ async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
 
 
 async def test_pubsub_broadcast_skips_disconnected_subscriber(router, agent_store, sub_store):
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     sender = await agent_store.create(name="publisher", capabilities=[])
     sub1 = await agent_store.create(name="sub1", capabilities=[])
     sub2 = await agent_store.create(name="sub2", capabilities=[])

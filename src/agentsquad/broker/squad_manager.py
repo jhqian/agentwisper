@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.types import SquadRole
-from persistence.agent_store import AgentStore
-from persistence.database import AsyncDatabase
-from persistence.squad_store import SquadStore
+from agentsquad.common.types import SquadRole
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.squad_store import SquadStore
 
 
 class SquadManager:

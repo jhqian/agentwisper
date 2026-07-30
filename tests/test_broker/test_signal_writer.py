@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from broker.signal_writer import SignalWriter
+from agentsquad.broker.signal_writer import SignalWriter
 
 
 @pytest.fixture

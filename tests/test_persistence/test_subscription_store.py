@@ -3,8 +3,8 @@
 # Licensed under the Apache License, Version 2.0
 
 import pytest
-from persistence.subscription_store import SubscriptionStore
-from persistence.agent_store import AgentStore
+from agentsquad.persistence.subscription_store import SubscriptionStore
+from agentsquad.persistence.agent_store import AgentStore
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ async def test_list_by_agent(store, agent_store):
 
 
 async def test_get_subscribers_excludes_disconnected(store, agent_store):
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     a1 = await agent_store.create(name="sub1", capabilities=[])
     a2 = await agent_store.create(name="sub2", capabilities=[])
     await store.create(agent_id=a1, topic="deploy")
@@ -74,7 +74,7 @@ async def test_get_subscribers_excludes_disconnected(store, agent_store):
 
 
 async def test_get_subscribers_squad_scoped_excludes_disconnected(store, agent_store):
-    from common.types import AgentStatus
+    from agentsquad.common.types import AgentStatus
     a1 = await agent_store.create(name="sub1", capabilities=[])
     a2 = await agent_store.create(name="sub2", capabilities=[])
     await store.create(agent_id=a1, topic="deploy", squad_id="squad_x")

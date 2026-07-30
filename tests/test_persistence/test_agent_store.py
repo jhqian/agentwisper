@@ -4,8 +4,8 @@
 """Tests for AgentStore CRUD and lifecycle operations."""
 
 import pytest
-from persistence.agent_store import AgentStore
-from common.types import AgentStatus
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.common.types import AgentStatus
 
 
 @pytest.fixture

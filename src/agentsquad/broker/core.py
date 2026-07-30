@@ -9,18 +9,18 @@ import anyio
 import json
 import logging
 
-from common.version import get_version
+from agentsquad.common.version import get_version
 from datetime import datetime, timezone
 from typing import Any
 
-from broker.agent_registry import AgentRegistry
-from broker.router import MessageRouter
-from broker.squad_manager import SquadManager
-from broker.team_manager import TeamManager
-from common.config import BrokerConfig
-from common.types import MessageType
-from persistence.database import AsyncDatabase
-from persistence.subscription_store import SubscriptionStore
+from agentsquad.broker.agent_registry import AgentRegistry
+from agentsquad.broker.router import MessageRouter
+from agentsquad.broker.squad_manager import SquadManager
+from agentsquad.broker.team_manager import TeamManager
+from agentsquad.common.config import BrokerConfig
+from agentsquad.common.types import MessageType
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.subscription_store import SubscriptionStore
 
 logger = logging.getLogger(__name__)
 

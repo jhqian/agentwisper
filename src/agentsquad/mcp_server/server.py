@@ -10,9 +10,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP, Context
 
-from broker.core import Broker
-from common.config import BrokerConfig, load_config
-from persistence.message_store import MessageStore
+from agentsquad.broker.core import Broker
+from agentsquad.common.config import BrokerConfig, load_config
+from agentsquad.persistence.message_store import MessageStore
 
 # Module-level singleton broker shared across all MCP sessions.
 # The FastMCP lifespan is invoked once per client session (not once per
@@ -482,7 +482,7 @@ async def message_get(
     ctx: Context | None = None,
 ) -> dict:
     """Retrieve a single message by its msg_id. Returns the full message record or None if not found."""
-    from persistence.message_store import MessageStore
+    from agentsquad.persistence.message_store import MessageStore
 
     broker = _get_broker(ctx)
     store = MessageStore(broker._db)
@@ -544,7 +544,7 @@ def run_server(port: int = 8000, host: str = "127.0.0.1") -> None:
 
     import uvicorn
 
-    from common.version import get_version
+    from agentsquad.common.version import get_version
 
     logging.basicConfig(
         level=logging.INFO,

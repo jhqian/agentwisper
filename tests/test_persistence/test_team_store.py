@@ -3,8 +3,8 @@
 # Licensed under the Apache License, Version 2.0
 
 import pytest
-from persistence.team_store import TeamStore
-from persistence.agent_store import AgentStore
+from agentsquad.persistence.team_store import TeamStore
+from agentsquad.persistence.agent_store import AgentStore
 
 
 @pytest.fixture

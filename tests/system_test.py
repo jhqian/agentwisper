@@ -940,7 +940,7 @@ async def run_tests() -> None:
         [
             sys.executable,
             "-c",
-            "from mcp_server.server import run_server; run_server(8198)",
+            "from agentsquad.mcp_server.server import run_server; run_server(8198)",
         ],
         cwd=project_root,
         env=env,

@@ -4,7 +4,7 @@
 """Shared pytest fixtures for agentsquad tests."""
 
 import pytest
-from persistence.database import AsyncDatabase
+from agentsquad.persistence.database import AsyncDatabase
 
 
 @pytest.fixture

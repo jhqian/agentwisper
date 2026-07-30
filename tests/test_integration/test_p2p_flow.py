@@ -5,8 +5,8 @@
 
 import pytest
 
-from broker.core import Broker
-from common.config import BrokerConfig
+from agentsquad.broker.core import Broker
+from agentsquad.common.config import BrokerConfig
 
 
 @pytest.fixture

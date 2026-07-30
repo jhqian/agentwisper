@@ -5,7 +5,7 @@
 
 from click.testing import CliRunner
 
-from cli.main import cli
+from agentsquad.cli.main import cli
 
 
 def test_cli_help():

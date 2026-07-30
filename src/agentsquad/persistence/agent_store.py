@@ -10,8 +10,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from common.types import AgentStatus
-from persistence.database import AsyncDatabase
+from agentsquad.common.types import AgentStatus
+from agentsquad.persistence.database import AsyncDatabase
 
 
 def _generate_agent_id() -> str:

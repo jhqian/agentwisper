@@ -4,9 +4,9 @@
 """Tests for MessageStore CRUD, delivery log fan-out, and query capabilities."""
 
 import pytest
-from persistence.message_store import MessageStore
-from persistence.agent_store import AgentStore
-from common.types import MessageType, MessageStatus
+from agentsquad.persistence.message_store import MessageStore
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.common.types import MessageType, MessageStatus
 
 
 @pytest.fixture

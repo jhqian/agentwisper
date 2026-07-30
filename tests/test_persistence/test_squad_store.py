@@ -3,9 +3,9 @@
 # Licensed under the Apache License, Version 2.0
 
 import pytest
-from persistence.squad_store import SquadStore
-from persistence.agent_store import AgentStore
-from common.types import SquadRole
+from agentsquad.persistence.squad_store import SquadStore
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.common.types import SquadRole
 
 
 @pytest.fixture

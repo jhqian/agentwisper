@@ -9,7 +9,7 @@ import click
 
 
 def _get_version() -> str:
-    from common.version import get_version
+    from agentsquad.common.version import get_version
     return get_version()
 
 
@@ -37,7 +37,7 @@ def start(port: int, host: str) -> None:
     """Start the broker MCP server."""
     import os
 
-    from mcp_server.server import run_server
+    from agentsquad.mcp_server.server import run_server
 
     os.environ.setdefault("AGENTSQUAD_HTTP_PORT", str(port))
     os.environ.setdefault("AGENTSQUAD_HTTP_HOST", host)

@@ -3,9 +3,9 @@
 # Licensed under the Apache License, Version 2.0
 
 import pytest
-from broker.team_manager import TeamManager
-from persistence.database import AsyncDatabase
-from persistence.agent_store import AgentStore
+from agentsquad.broker.team_manager import TeamManager
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.agent_store import AgentStore
 
 
 @pytest.fixture

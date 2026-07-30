@@ -5,10 +5,10 @@
 
 import pytest
 
-from broker.squad_manager import SquadManager
-from common.types import SquadRole
-from persistence.agent_store import AgentStore
-from persistence.database import AsyncDatabase
+from agentsquad.broker.squad_manager import SquadManager
+from agentsquad.common.types import SquadRole
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.database import AsyncDatabase
 
 
 @pytest.fixture

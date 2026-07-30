@@ -9,9 +9,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from persistence.agent_store import AgentStore
-from persistence.database import AsyncDatabase
-from persistence.team_store import TeamStore
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.team_store import TeamStore
 
 
 class TeamManager:

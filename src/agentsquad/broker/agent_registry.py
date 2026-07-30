@@ -7,10 +7,10 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from persistence.database import AsyncDatabase
-from persistence.agent_store import AgentStore
-from persistence.message_store import MessageStore
-from common.types import AgentStatus
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.message_store import MessageStore
+from agentsquad.common.types import AgentStatus
 
 
 class AgentRegistry:

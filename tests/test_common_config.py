@@ -1,5 +1,5 @@
 import os
-from common.config import BrokerConfig, load_config
+from agentsquad.common.config import BrokerConfig, load_config
 
 
 def test_default_config():

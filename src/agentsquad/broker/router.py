@@ -8,12 +8,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from common.types import MessageStatus, MessageType, SquadRole
-from persistence.agent_store import AgentStore
-from persistence.database import AsyncDatabase
-from persistence.message_store import MessageStore
-from persistence.squad_store import SquadStore
-from persistence.subscription_store import SubscriptionStore
+from agentsquad.common.types import MessageStatus, MessageType, SquadRole
+from agentsquad.persistence.agent_store import AgentStore
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.persistence.message_store import MessageStore
+from agentsquad.persistence.squad_store import SquadStore
+from agentsquad.persistence.subscription_store import SubscriptionStore
 
 
 class MessageRouter:

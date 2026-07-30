@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from persistence.database import AsyncDatabase
+from agentsquad.persistence.database import AsyncDatabase
 
 
 def _generate_squad_id() -> str:

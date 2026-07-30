@@ -9,8 +9,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from persistence.database import AsyncDatabase
-from common.types import MessageType, MessageStatus
+from agentsquad.persistence.database import AsyncDatabase
+from agentsquad.common.types import MessageType, MessageStatus
 
 
 def _generate_msg_id() -> str:
