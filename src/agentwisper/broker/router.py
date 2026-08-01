@@ -192,6 +192,19 @@ class MessageRouter:
         Returns:
             Combined list of message dicts.
         """
+        # unread_only=False is a pure query: return every message for the
+        # agent (any status) without marking anything.
+        if not unread_only:
+            direct_messages = await self._message_store.get_all_for_agent(
+                agent_id, limit=limit
+            )
+            delivery_messages = await self._message_store.get_all_deliveries(
+                agent_id, limit=limit
+            )
+            combined = list(direct_messages)
+            combined.extend(delivery_messages)
+            return combined
+
         # Get pending direct messages
         direct_messages = await self._message_store.get_pending_for_agent(
             agent_id, limit=limit

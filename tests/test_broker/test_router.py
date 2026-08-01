@@ -208,3 +208,29 @@ async def test_pubsub_broadcast_skips_disconnected_subscriber(router, agent_stor
     assert result["subscriber_count"] == 1
     assert sub1 in result["subscriber_ids"]
     assert sub2 not in result["subscriber_ids"]
+
+
+async def test_poll_all_mode_includes_delivered(router, agent_store):
+    """unread_only=False returns delivered messages as well as pending ones."""
+    sender = await agent_store.create(name="sender", capabilities=[])
+    receiver = await agent_store.create(name="receiver", capabilities=[])
+    await router.send_message(sender_id=sender, recipient=receiver,
+                              payload="hello", msg_type=MessageType.P2P)
+    # Default poll consumes (marks delivered) the message
+    await router.poll_messages(receiver)
+    assert await router.poll_messages(receiver) == []
+    # All-mode still returns the delivered message
+    all_msgs = await router.poll_messages(receiver, unread_only=False)
+    assert len(all_msgs) == 1
+    assert all_msgs[0]["payload"] == "hello"
+
+
+async def test_poll_all_mode_does_not_consume_pending(router, agent_store):
+    """unread_only=False is a pure query: pending messages stay pending."""
+    sender = await agent_store.create(name="sender", capabilities=[])
+    receiver = await agent_store.create(name="receiver", capabilities=[])
+    await router.send_message(sender_id=sender, recipient=receiver,
+                              payload="keep-me", msg_type=MessageType.P2P)
+    assert len(await router.poll_messages(receiver, unread_only=False)) == 1
+    # Message is still pending for the default poll
+    assert len(await router.poll_messages(receiver)) == 1

@@ -75,6 +75,16 @@ class MessageStore:
             (agent_id, limit),
         )
 
+    async def get_all_for_agent(
+        self, agent_id: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Retrieve all messages for an agent regardless of status."""
+        return await self._db.execute_fetchall(
+            "SELECT * FROM messages WHERE recipient_id = ? "
+            "ORDER BY created_at LIMIT ?",
+            (agent_id, limit),
+        )
+
     async def mark_delivered(self, msg_id: str) -> None:
         """Mark a message as delivered with current timestamp."""
         await self._db.execute(
@@ -129,6 +139,19 @@ class MessageStore:
             "m.parent_msg_id, m.created_at as msg_created_at "
             "FROM delivery_logs dl JOIN messages m ON dl.msg_id = m.msg_id "
             "WHERE dl.recipient_id = ? AND dl.status = 'pending' "
+            "ORDER BY m.created_at LIMIT ?",
+            (agent_id, limit),
+        )
+
+    async def get_all_deliveries(
+        self, agent_id: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Retrieve all delivery logs for an agent regardless of status."""
+        return await self._db.execute_fetchall(
+            "SELECT dl.*, m.sender_id, m.topic, m.msg_type, m.payload, m.squad_id, "
+            "m.parent_msg_id, m.created_at as msg_created_at "
+            "FROM delivery_logs dl JOIN messages m ON dl.msg_id = m.msg_id "
+            "WHERE dl.recipient_id = ? "
             "ORDER BY m.created_at LIMIT ?",
             (agent_id, limit),
         )
