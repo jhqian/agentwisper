@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import anyio
-import json
 import logging
 
 from agentwisper.common.version import get_version
@@ -143,18 +142,13 @@ class Broker:
         """Build the active-agent snapshot included in register/reconnect responses.
 
         Returns the minimal fields a newly-joined agent needs to address
-        others: agent_id, name, and capabilities (deserialized to a list).
-        Malformed capabilities propagate as JSONDecodeError rather than
-        being silently swallowed.
+        others: agent_id and name.
         """
         rows = await self._registry.list_active()
-        # TODO: agent_list still returns capabilities as a JSON string;
-        # unify both responses in a separate breaking change.
         return [
             {
                 "agent_id": row["agent_id"],
                 "name": row["name"],
-                "capabilities": json.loads(row["capabilities"]),
             }
             for row in rows
         ]
@@ -162,7 +156,6 @@ class Broker:
     async def register_agent(
         self,
         name: str,
-        capabilities: list[str],
         metadata: dict[str, Any] | None = None,
         session_name: str | None = None,
         force: bool = False,
@@ -184,10 +177,10 @@ class Broker:
                             )
                     await self._squad_mgr._squad_store.dissolve(squad_id)
                     logger.info("Squad %s dissolved (leader force-replaced)", squad_id)
-        result = await self._registry.register(name, capabilities, metadata, session_name=session_name, force=force)
+        result = await self._registry.register(name, metadata, session_name=session_name, force=force)
         logger.info(
-            "Agent registered: %s (%s) capabilities=%s session=%s",
-            result["assigned_name"], result["agent_id"], capabilities, session_name,
+            "Agent registered: %s (%s) session=%s",
+            result["assigned_name"], result["agent_id"], session_name,
         )
         peers = await self._build_peers()
         return {

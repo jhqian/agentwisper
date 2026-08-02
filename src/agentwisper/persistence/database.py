@@ -19,13 +19,12 @@ CREATE TABLE IF NOT EXISTS agents (
     agent_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
-    capabilities TEXT NOT NULL DEFAULT '[]',
+    metadata TEXT NOT NULL DEFAULT '{}',
     squad_id TEXT,
     current_team_id TEXT,
     created_at TEXT NOT NULL,
     last_seen TEXT NOT NULL,
     session_name TEXT,
-    metadata TEXT NOT NULL DEFAULT '{}',
     disconnected_at TEXT
 );
 
@@ -158,6 +157,10 @@ MIGRATIONS = [
             AND (a.last_seen < b.last_seen OR (a.last_seen = b.last_seen AND a.rowid < b.rowid))
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_name ON agents(name);
+    """,
+    # Migration 5: drop the unused capabilities column
+    """
+    ALTER TABLE agents DROP COLUMN capabilities;
     """,
 ]
 

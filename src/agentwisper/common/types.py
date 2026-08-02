@@ -37,7 +37,6 @@ class AgentRecord:
     agent_id: str
     name: str
     status: AgentStatus
-    capabilities: list[str]
     squad_id: str | None
     current_team_id: str | None
     created_at: str

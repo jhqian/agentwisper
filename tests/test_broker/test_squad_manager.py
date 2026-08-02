@@ -30,7 +30,7 @@ async def agent_store(db):
 
 
 async def test_create_squad(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
     squad_id = await manager.create(name="dev-team", creator_agent_id=leader_id)
     assert squad_id.startswith("squad_")
     info = await manager.get_info(squad_id)
@@ -42,8 +42,8 @@ async def test_create_squad(manager, agent_store):
 
 
 async def test_join_squad(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     members = await manager._squad_store.get_members(squad_id)
@@ -54,9 +54,9 @@ async def test_join_squad(manager, agent_store):
 
 
 async def test_join_requires_leader(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
-    outsider_id = await agent_store.create(name="outsider", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
+    outsider_id = await agent_store.create(name="outsider")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     # member cannot invite
@@ -65,8 +65,8 @@ async def test_join_requires_leader(manager, agent_store):
 
 
 async def test_leave_squad(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     await manager.leave(member_id)
@@ -77,8 +77,8 @@ async def test_leave_squad(manager, agent_store):
 
 
 async def test_kick_member(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     await manager.kick(squad_id, member_id, caller_id=leader_id)
@@ -87,8 +87,8 @@ async def test_kick_member(manager, agent_store):
 
 
 async def test_kick_requires_leader(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     with pytest.raises(PermissionError, match="leader"):
@@ -96,8 +96,8 @@ async def test_kick_requires_leader(manager, agent_store):
 
 
 async def test_set_role(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     await manager.set_role(squad_id, member_id, SquadRole.OBSERVER, caller_id=leader_id)
@@ -106,8 +106,8 @@ async def test_set_role(manager, agent_store):
 
 
 async def test_transfer_leadership(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     await manager.set_role(squad_id, member_id, SquadRole.LEADER, caller_id=leader_id)
@@ -119,8 +119,8 @@ async def test_transfer_leadership(manager, agent_store):
 
 
 async def test_dissolve_squad(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     await manager.dissolve(squad_id, caller_id=leader_id)
@@ -132,8 +132,8 @@ async def test_dissolve_squad(manager, agent_store):
 
 
 async def test_dissolve_requires_leader(manager, agent_store):
-    leader_id = await agent_store.create(name="leader", capabilities=[])
-    member_id = await agent_store.create(name="member", capabilities=[])
+    leader_id = await agent_store.create(name="leader")
+    member_id = await agent_store.create(name="member")
     squad_id = await manager.create(name="team", creator_agent_id=leader_id)
     await manager.join(squad_id, member_id, SquadRole.MEMBER, caller_id=leader_id)
     with pytest.raises(PermissionError, match="leader"):
@@ -141,8 +141,8 @@ async def test_dissolve_requires_leader(manager, agent_store):
 
 
 async def test_list_squads(manager, agent_store):
-    a1 = await agent_store.create(name="a1", capabilities=[])
-    a2 = await agent_store.create(name="a2", capabilities=[])
+    a1 = await agent_store.create(name="a1")
+    a2 = await agent_store.create(name="a2")
     await manager.create(name="team-a", creator_agent_id=a1)
     await manager.create(name="team-b", creator_agent_id=a2)
     squads = await manager.list_squads()

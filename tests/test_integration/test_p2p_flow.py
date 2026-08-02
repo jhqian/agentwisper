@@ -20,8 +20,8 @@ async def broker(tmp_path):
 
 async def test_p2p_full_flow(broker):
     """Register -> send -> poll -> ack"""
-    sender = await broker.register_agent("alice", ["code"])
-    receiver = await broker.register_agent("bob", ["review"])
+    sender = await broker.register_agent("alice")
+    receiver = await broker.register_agent("bob")
 
     msg = await broker.send_message(
         sender["agent_id"],
@@ -45,8 +45,8 @@ async def test_p2p_full_flow(broker):
 
 async def test_p2p_send_by_name(broker):
     """Send message using agent name instead of ID"""
-    sender = await broker.register_agent("alice", [])
-    receiver = await broker.register_agent("bob", [])
+    sender = await broker.register_agent("alice")
+    receiver = await broker.register_agent("bob")
 
     msg = await broker.send_message(
         sender["agent_id"],
@@ -62,8 +62,8 @@ async def test_p2p_send_by_name(broker):
 
 async def test_p2p_multiple_messages(broker):
     """Send multiple messages and poll them all"""
-    s = await broker.register_agent("sender", [])
-    r = await broker.register_agent("receiver", [])
+    s = await broker.register_agent("sender")
+    r = await broker.register_agent("receiver")
 
     for i in range(5):
         await broker.send_message(

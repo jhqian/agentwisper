@@ -68,11 +68,10 @@ Each step below shows the slash command and the equivalent natural language.
 Or natural language:
 
 ```
-Use the agentwisper-broker MCP server to register an agent named "code-reviewer"
-with capabilities ["code-review", "refactoring"].
+Use the agentwisper-broker MCP server to register an agent named "code-reviewer".
 ```
 
-This calls `agent_register(name="code-reviewer", capabilities=["code-review", "refactoring"])`.
+This calls `agent_register(name="code-reviewer")`.
 
 Note the `agent_id` from the response -- you'll need it in subsequent steps.
 
@@ -85,8 +84,7 @@ Note the `agent_id` from the response -- you'll need it in subsequent steps.
 Or natural language:
 
 ```
-Use the agentwisper-broker MCP server to register an agent named "tester"
-with capabilities ["testing", "debugging"].
+Use the agentwisper-broker MCP server to register an agent named "tester".
 ```
 
 Note Agent B's `agent_id` as well.

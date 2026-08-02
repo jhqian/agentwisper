@@ -60,7 +60,6 @@ class AgentRegistry:
     async def register(
         self,
         name: str,
-        capabilities: list[str],
         metadata: dict[str, Any] | None = None,
         session_name: str | None = None,
         force: bool = False,
@@ -79,7 +78,7 @@ class AgentRegistry:
             await self._check_name_available(name)
         try:
             agent_id = await self._agent_store.create(
-                name, capabilities, metadata, session_name=session_name
+                name, metadata, session_name=session_name
             )
         except sqlite3.IntegrityError as exc:
             raise ValueError(

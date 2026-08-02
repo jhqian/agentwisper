@@ -66,21 +66,21 @@ async def check_agent_state_transitions(
     a_result = await call_tool(
         session,
         "agent_register",
-        {"name": "sys-alpha", "capabilities": ["code"]},
+        {"name": "sys-alpha"},
     )
     report("state: register alpha", "agent_id" in a_result, str(a_result))
 
     b_result = await call_tool(
         session,
         "agent_register",
-        {"name": "sys-beta", "capabilities": ["test"]},
+        {"name": "sys-beta"},
     )
     report("state: register beta", "agent_id" in b_result, str(b_result))
 
     c_result = await call_tool(
         session,
         "agent_register",
-        {"name": "sys-gamma", "capabilities": ["review"]},
+        {"name": "sys-gamma"},
     )
     report("state: register gamma", "agent_id" in c_result, str(c_result))
 

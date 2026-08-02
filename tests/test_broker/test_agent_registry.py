@@ -21,7 +21,7 @@ async def registry(db):
 
 
 async def test_register(registry):
-    result = await registry.register(name="test-agent", capabilities=["code"])
+    result = await registry.register(name="test-agent")
     assert result["agent_id"].startswith("agent_")
     assert result["assigned_name"] == "test-agent"
     info = await registry.get_info(result["agent_id"])
@@ -30,7 +30,7 @@ async def test_register(registry):
 
 
 async def test_deregister(registry):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     await registry.deregister(result["agent_id"])
     info = await registry.get_info(result["agent_id"])
     assert info is not None
@@ -43,13 +43,13 @@ async def test_deregister_nonexistent(registry):
 
 
 async def test_resolve_by_id(registry):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     resolved = await registry.resolve_recipient(result["agent_id"])
     assert resolved == result["agent_id"]
 
 
 async def test_resolve_by_name(registry):
-    result = await registry.register(name="unique-name", capabilities=[])
+    result = await registry.register(name="unique-name")
     resolved = await registry.resolve_recipient("unique-name")
     assert resolved == result["agent_id"]
 
@@ -60,22 +60,22 @@ async def test_resolve_nonexistent(registry):
 
 
 async def test_resolve_disconnected_by_id_returns_id(registry):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     await registry.deregister(result["agent_id"])
     resolved = await registry.resolve_recipient(result["agent_id"])
     assert resolved == result["agent_id"]
 
 
 async def test_resolve_disconnected_by_name_returns_id(registry):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     await registry.deregister(result["agent_id"])
     resolved = await registry.resolve_recipient("test")
     assert resolved == result["agent_id"]
 
 
 async def test_list_agents(registry):
-    await registry.register(name="a1", capabilities=[])
-    await registry.register(name="a2", capabilities=[])
+    await registry.register(name="a1")
+    await registry.register(name="a2")
     agents = await registry.list_agents()
     assert len(agents) == 2
 
@@ -87,21 +87,21 @@ async def test_list_agents(registry):
 
 async def test_register_unique_name_no_collision(registry):
     """First registration gets the exact requested name."""
-    result = await registry.register(name="dev", capabilities=[])
+    result = await registry.register(name="dev")
     assert result["assigned_name"] == "dev"
 
 
 async def test_register_duplicate_name_raises(registry):
     """Second registration with same name raises ValueError."""
-    r1 = await registry.register(name="dev", capabilities=[])
+    r1 = await registry.register(name="dev")
     with pytest.raises(ValueError, match="already registered"):
-        await registry.register(name="dev", capabilities=[])
+        await registry.register(name="dev")
 
 
 async def test_register_duplicate_name_force_allows(registry):
     """Force=True allows duplicate name registration."""
-    r1 = await registry.register(name="dev", capabilities=[])
-    r2 = await registry.register(name="dev", capabilities=[], force=True)
+    r1 = await registry.register(name="dev")
+    r2 = await registry.register(name="dev", force=True)
     assert r1["assigned_name"] == "dev"
     assert r2["assigned_name"] == "dev"
     assert r1["agent_id"] != r2["agent_id"]
@@ -109,19 +109,19 @@ async def test_register_duplicate_name_force_allows(registry):
 
 async def test_register_independent_bases(registry):
     """Different base names don't interfere."""
-    r1 = await registry.register(name="dev", capabilities=[])
-    r2 = await registry.register(name="test", capabilities=[])
+    r1 = await registry.register(name="dev")
+    r2 = await registry.register(name="test")
     assert r1["assigned_name"] == "dev"
     assert r2["assigned_name"] == "test"
 
 
 async def test_register_reclaim_after_deregister_requires_force(registry):
     """After deregister, name is NOT released (soft delete). Must use force."""
-    r1 = await registry.register(name="dev", capabilities=[])
+    r1 = await registry.register(name="dev")
     await registry.deregister(r1["agent_id"])
     with pytest.raises(ValueError, match="already registered"):
-        await registry.register(name="dev", capabilities=[])
-    r2 = await registry.register(name="dev", capabilities=[], force=True)
+        await registry.register(name="dev")
+    r2 = await registry.register(name="dev", force=True)
     assert r2["assigned_name"] == "dev"
 
 
@@ -131,7 +131,7 @@ async def test_register_reclaim_after_deregister_requires_force(registry):
 
 
 async def test_deregister_preserves_squad_membership(registry, db):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     agent_id = result["agent_id"]
     await db.execute(
         "INSERT INTO squads (squad_id, name, status, created_at) VALUES (?, ?, ?, ?)",
@@ -149,7 +149,7 @@ async def test_deregister_preserves_squad_membership(registry, db):
 
 
 async def test_deregister_preserves_subscriptions(registry, db):
-    result = await registry.register(name="test", capabilities=[])
+    result = await registry.register(name="test")
     agent_id = result["agent_id"]
     await db.execute(
         "INSERT INTO subscriptions (sub_id, agent_id, topic, created_at) VALUES (?, ?, ?, ?)",
@@ -163,7 +163,7 @@ async def test_deregister_preserves_subscriptions(registry, db):
 
 
 async def test_reconnect_restores_disconnected_agent(registry):
-    r = await registry.register(name="dev", capabilities=["code"], session_name="sess_old")
+    r = await registry.register(name="dev", session_name="sess_old")
     agent_id = r["agent_id"]
     await registry.deregister(agent_id)
     result = await registry.reconnect(name="dev", session_name="sess_new")
@@ -180,7 +180,7 @@ async def test_reconnect_nonexistent_raises(registry):
 
 
 async def test_reconnect_active_agent_succeeds(registry):
-    r = await registry.register(name="dev", capabilities=[])
+    r = await registry.register(name="dev")
     agent_id = r["agent_id"]
     result = await registry.reconnect(name="dev", session_name="sess_new")
     assert result["agent_id"] == agent_id
@@ -189,18 +189,8 @@ async def test_reconnect_active_agent_succeeds(registry):
     assert info["session_name"] == "sess_new"
 
 
-async def test_reconnect_preserves_capabilities(registry):
-    r = await registry.register(name="dev", capabilities=["code", "review"])
-    agent_id = r["agent_id"]
-    await registry.deregister(agent_id)
-    result = await registry.reconnect(name="dev", session_name="sess_2")
-    assert result["agent_id"] == agent_id
-    info = await registry.get_info(agent_id)
-    assert info["capabilities"] == '["code", "review"]'
-
-
 async def test_reconnect_active_agent_no_error(registry):
-    r = await registry.register(name="dev", capabilities=[])
+    r = await registry.register(name="dev")
     agent_id = r["agent_id"]
     result = await registry.reconnect(name="dev")
     assert result["agent_id"] == agent_id
@@ -213,7 +203,7 @@ async def test_reconnect_never_registered_error_suggests_cause(registry):
 
 
 async def test_reconnect_preserves_squad(registry, db):
-    r = await registry.register(name="dev", capabilities=[])
+    r = await registry.register(name="dev")
     agent_id = r["agent_id"]
     await db.execute(
         "INSERT INTO squads (squad_id, name, status, created_at) VALUES (?, ?, ?, ?)",
@@ -238,7 +228,7 @@ async def test_reconnect_preserves_squad(registry, db):
 
 
 async def test_reconnect_with_credentials(registry):
-    r = await registry.register(name="dev", capabilities=["code"], session_name="sess_old")
+    r = await registry.register(name="dev", session_name="sess_old")
     agent_id = r["agent_id"]
     await registry.deregister(agent_id)
     result = await registry.reconnect(
@@ -251,7 +241,7 @@ async def test_reconnect_with_credentials(registry):
 
 
 async def test_reconnect_wrong_agent_id(registry):
-    r = await registry.register(name="dev", capabilities=["code"])
+    r = await registry.register(name="dev")
     await registry.deregister(r["agent_id"])
     with pytest.raises(ValueError, match="not found"):
         await registry.reconnect(
@@ -260,7 +250,7 @@ async def test_reconnect_wrong_agent_id(registry):
 
 
 async def test_reconnect_wrong_name(registry):
-    r = await registry.register(name="dev", capabilities=["code"])
+    r = await registry.register(name="dev")
     agent_id = r["agent_id"]
     await registry.deregister(agent_id)
     with pytest.raises(ValueError, match="Credential mismatch"):
@@ -277,7 +267,7 @@ async def test_reconnect_nonexistent_agent_id(registry):
 
 
 async def test_reconnect_active_agent_with_credentials(registry):
-    r = await registry.register(name="dev", capabilities=[], session_name="old")
+    r = await registry.register(name="dev", session_name="old")
     result = await registry.reconnect(
         name="dev", agent_id=r["agent_id"], session_name="new"
     )
@@ -288,8 +278,8 @@ async def test_reconnect_active_agent_with_credentials(registry):
 
 
 async def test_registry_list_active_excludes_disconnected(registry):
-    a1 = await registry.register(name="alive", capabilities=["code"])
-    a2 = await registry.register(name="ghost", capabilities=[])
+    a1 = await registry.register(name="alive")
+    a2 = await registry.register(name="ghost")
     await registry.deregister(a2["agent_id"])
     agents = await registry.list_active()
     ids = [a["agent_id"] for a in agents]
@@ -298,7 +288,7 @@ async def test_registry_list_active_excludes_disconnected(registry):
 
 
 async def test_registry_list_active_delegates_to_store(registry):
-    await registry.register(name="dev", capabilities=["code"])
+    await registry.register(name="dev")
     agents = await registry.list_active()
     assert len(agents) == 1
     assert agents[0]["name"] == "dev"

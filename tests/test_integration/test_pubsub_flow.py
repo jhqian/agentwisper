@@ -20,9 +20,9 @@ async def broker(tmp_path):
 
 async def test_pubsub_full_flow(broker):
     """Subscribe -> broadcast -> fan-out delivery"""
-    publisher = await broker.register_agent("publisher", [])
-    sub1 = await broker.register_agent("sub1", [])
-    sub2 = await broker.register_agent("sub2", [])
+    publisher = await broker.register_agent("publisher")
+    sub1 = await broker.register_agent("sub1")
+    sub2 = await broker.register_agent("sub2")
 
     await broker.subscribe_topic(sub1["agent_id"], "alerts")
     await broker.subscribe_topic(sub2["agent_id"], "alerts")
@@ -43,9 +43,9 @@ async def test_pubsub_full_flow(broker):
 
 async def test_pubsub_squad_scoped(broker):
     """Squad-scoped subscriptions"""
-    publisher = await broker.register_agent("pub", [])
-    sub_squad = await broker.register_agent("sub_squad", [])
-    sub_global = await broker.register_agent("sub_global", [])
+    publisher = await broker.register_agent("pub")
+    sub_squad = await broker.register_agent("sub_squad")
+    sub_global = await broker.register_agent("sub_global")
 
     # Create squad
     squad = await broker.create_squad("team-a", publisher["agent_id"])
@@ -74,8 +74,8 @@ async def test_pubsub_squad_scoped(broker):
 
 async def test_pubsub_unsubscribe(broker):
     """Subscribe, then unsubscribe, verify no delivery"""
-    pub = await broker.register_agent("pub", [])
-    sub = await broker.register_agent("sub", [])
+    pub = await broker.register_agent("pub")
+    sub = await broker.register_agent("sub")
 
     sub_result = await broker.subscribe_topic(sub["agent_id"], "events")
     await broker.unsubscribe_topic(sub_result["sub_id"])

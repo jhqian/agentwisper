@@ -143,7 +143,6 @@ async def _resolve_agent_any_status(broker: Broker, agent_id_or_name: str) -> st
 @mcp.tool()
 async def agent_register(
     name: str,
-    capabilities: list[str],
     metadata: dict[str, Any] | None = None,
     session_name: str | None = None,
     force: bool = False,
@@ -154,10 +153,10 @@ async def agent_register(
     Rejects if the name is already registered unless force=True.
     Use agent_reconnect to resume an existing agent session.
     Returns agent_id, assigned_name, status, and peers (snapshot of
-    currently active agents: agent_id, name, capabilities).
+    currently active agents: agent_id, name).
     """
     broker = _get_broker(ctx)
-    return await broker.register_agent(name, capabilities, metadata, session_name=session_name, force=force)
+    return await broker.register_agent(name, metadata, session_name=session_name, force=force)
 
 
 @mcp.tool()
@@ -201,7 +200,7 @@ async def agent_reconnect(
     Restores the agent to active status with its original agent_id.
     All squad memberships, subscriptions, and buffered messages are preserved.
     Returns agent_id, assigned_name, status, buffered_count, and peers
-    (snapshot of currently active agents: agent_id, name, capabilities).
+    (snapshot of currently active agents: agent_id, name).
     """
     broker = _get_broker(ctx)
     return await broker.reconnect_agent(name, agent_id=agent_id, session_name=session_name)

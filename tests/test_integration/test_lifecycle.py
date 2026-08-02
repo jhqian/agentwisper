@@ -20,7 +20,7 @@ async def broker(tmp_path):
 
 async def test_reconnect_with_buffered_messages(broker):
     """Disconnected agent can reconnect and resume operations"""
-    receiver = await broker.register_agent("receiver", [])
+    receiver = await broker.register_agent("receiver")
 
     await broker.deregister_agent(receiver["agent_id"])
 
@@ -33,7 +33,7 @@ async def test_reconnect_with_buffered_messages(broker):
 
 async def test_deregister_soft_deletes_agent(broker):
     """Deregistered agent becomes disconnected, not removed"""
-    agent = await broker.register_agent("temp-agent", [])
+    agent = await broker.register_agent("temp-agent")
     agent_id = agent["agent_id"]
 
     await broker.deregister_agent(agent_id)
@@ -45,9 +45,9 @@ async def test_deregister_soft_deletes_agent(broker):
 
 async def test_squad_full_lifecycle(broker):
     """Create squad -> join -> role change -> dissolve"""
-    leader = await broker.register_agent("leader", [])
-    member = await broker.register_agent("member", [])
-    observer = await broker.register_agent("observer", [])
+    leader = await broker.register_agent("leader")
+    member = await broker.register_agent("member")
+    observer = await broker.register_agent("observer")
 
     # Create
     squad = await broker.create_squad("dev-team", leader["agent_id"])
@@ -80,8 +80,8 @@ async def test_squad_full_lifecycle(broker):
 
 async def test_team_full_lifecycle(broker):
     """Form team -> communicate -> dismiss"""
-    a1 = await broker.register_agent("a1", [])
-    a2 = await broker.register_agent("a2", [])
+    a1 = await broker.register_agent("a1")
+    a2 = await broker.register_agent("a2")
 
     team = await broker.form_team(
         a1["agent_id"], [a1["agent_id"], a2["agent_id"]], topic="review"
@@ -100,8 +100,8 @@ async def test_team_full_lifecycle(broker):
 
 async def test_broker_status(broker):
     """Broker reports healthy with correct agent count"""
-    await broker.register_agent("a1", [])
-    await broker.register_agent("a2", [])
+    await broker.register_agent("a1")
+    await broker.register_agent("a2")
 
     status = await broker.broker_status()
     assert status["status"] == "healthy"

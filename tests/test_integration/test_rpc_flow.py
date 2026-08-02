@@ -20,8 +20,8 @@ async def broker(tmp_path):
 
 async def test_rpc_full_flow(broker):
     """Request -> send response -> poll response"""
-    caller = await broker.register_agent("caller", [])
-    worker = await broker.register_agent("worker", [])
+    caller = await broker.register_agent("caller")
+    worker = await broker.register_agent("worker")
 
     req = await broker.send_message(
         caller["agent_id"],
@@ -51,8 +51,8 @@ async def test_rpc_full_flow(broker):
 
 async def test_rpc_multiple_requests(broker):
     """Multiple RPC calls, worker responds to each via send"""
-    caller = await broker.register_agent("caller", [])
-    worker = await broker.register_agent("worker", [])
+    caller = await broker.register_agent("caller")
+    worker = await broker.register_agent("worker")
 
     req1 = await broker.send_message(
         caller["agent_id"],

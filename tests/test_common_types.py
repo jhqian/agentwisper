@@ -10,7 +10,6 @@ def test_agent_record_creation():
         agent_id="agent_0192test",
         name="test-agent",
         status=AgentStatus.ACTIVE,
-        capabilities=["code", "review"],
         squad_id=None,
         current_team_id=None,
         created_at="2026-05-09T10:00:00Z",
@@ -20,7 +19,6 @@ def test_agent_record_creation():
     assert agent.agent_id == "agent_0192test"
     assert agent.name == "test-agent"
     assert agent.status == AgentStatus.ACTIVE
-    assert agent.capabilities == ["code", "review"]
     assert agent.squad_id is None
 
 

@@ -57,14 +57,14 @@ async def check_register_agents(session: ClientSession) -> tuple[str, str]:
     a = await call_tool(
         session,
         "agent_register",
-        {"name": "claude-code-alpha", "capabilities": ["code", "review"]},
+        {"name": "claude-code-alpha"},
     )
     report("register alpha", "agent_id" in a, str(a))
 
     b = await call_tool(
         session,
         "agent_register",
-        {"name": "claude-code-beta", "capabilities": ["test", "deploy"]},
+        {"name": "claude-code-beta"},
     )
     report("register beta", "agent_id" in b, str(b))
 

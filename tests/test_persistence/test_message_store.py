@@ -16,8 +16,8 @@ async def store(db):
 @pytest.fixture
 async def agents(db):
     agent_store = AgentStore(db)
-    a1 = await agent_store.create(name="sender", capabilities=[])
-    a2 = await agent_store.create(name="receiver", capabilities=[])
+    a1 = await agent_store.create(name="sender")
+    a2 = await agent_store.create(name="receiver")
     return a1, a2
 
 

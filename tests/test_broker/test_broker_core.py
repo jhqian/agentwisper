@@ -3,7 +3,6 @@
 
 """Tests for the Broker core orchestrator."""
 
-import json
 
 import pytest
 
@@ -21,28 +20,28 @@ async def broker(tmp_path):
 
 
 async def test_broker_registers_agent(broker):
-    result = await broker.register_agent("test-agent", ["code", "review"])
+    result = await broker.register_agent("test-agent")
     assert "agent_id" in result
     assert result["agent_id"].startswith("agent_")
 
 
 async def test_broker_gets_agent_info(broker):
-    reg = await broker.register_agent("test-agent", ["code"])
+    reg = await broker.register_agent("test-agent")
     info = await broker.get_agent_info(reg["agent_id"])
     assert info["name"] == "test-agent"
     assert info["status"] == "active"
 
 
 async def test_broker_lists_agents(broker):
-    await broker.register_agent("a1", [])
-    await broker.register_agent("a2", [])
+    await broker.register_agent("a1")
+    await broker.register_agent("a2")
     result = await broker.list_agents()
     assert len(result["agents"]) == 2
 
 
 async def test_broker_p2p_messaging(broker):
-    r1 = await broker.register_agent("sender", [])
-    r2 = await broker.register_agent("receiver", [])
+    r1 = await broker.register_agent("sender")
+    r2 = await broker.register_agent("receiver")
     msg = await broker.send_message(r1["agent_id"], r2["agent_id"], '{"hello": true}', "p2p")
     assert "msg_id" in msg
     polled = await broker.poll_messages(r2["agent_id"])
@@ -50,7 +49,7 @@ async def test_broker_p2p_messaging(broker):
 
 
 async def test_broker_squad_lifecycle(broker):
-    r = await broker.register_agent("leader", [])
+    r = await broker.register_agent("leader")
     squad = await broker.create_squad("dev-team", r["agent_id"])
     assert "squad_id" in squad
     info = await broker.get_squad_info(squad["squad_id"])
@@ -58,8 +57,8 @@ async def test_broker_squad_lifecycle(broker):
 
 
 async def test_broker_team_lifecycle(broker):
-    r1 = await broker.register_agent("a1", [])
-    r2 = await broker.register_agent("a2", [])
+    r1 = await broker.register_agent("a1")
+    r2 = await broker.register_agent("a2")
     team = await broker.form_team(r1["agent_id"], [r1["agent_id"], r2["agent_id"]], topic="review")
     assert "team_id" in team
     info = await broker.get_team_info(team["team_id"])
@@ -67,8 +66,8 @@ async def test_broker_team_lifecycle(broker):
 
 
 async def test_broker_pubsub(broker):
-    r1 = await broker.register_agent("pub", [])
-    r2 = await broker.register_agent("sub", [])
+    r1 = await broker.register_agent("pub")
+    r2 = await broker.register_agent("sub")
     await broker.subscribe_topic(r2["agent_id"], "alerts")
     result = await broker.broadcast_message(r1["agent_id"], "alerts", '{"level": "high"}')
     assert result["subscriber_count"] >= 1
@@ -83,7 +82,7 @@ async def test_broker_status(broker):
 
 
 async def test_broker_deregister(broker):
-    r = await broker.register_agent("test", [])
+    r = await broker.register_agent("test")
     await broker.deregister_agent(r["agent_id"])
     info = await broker.get_agent_info(r["agent_id"])
     assert info is not None
@@ -92,16 +91,16 @@ async def test_broker_deregister(broker):
 
 async def test_broker_deregister_name_stays_reserved(broker):
     """After deregister, name is still reserved. Must use force or reconnect."""
-    r = await broker.register_agent("dev", ["code"])
+    r = await broker.register_agent("dev")
     await broker.deregister_agent(r["agent_id"])
     with pytest.raises(ValueError, match="already registered"):
-        await broker.register_agent("dev", ["test"])
-    r2 = await broker.register_agent("dev", ["test"], force=True)
+        await broker.register_agent("dev")
+    r2 = await broker.register_agent("dev", force=True)
     assert r2["assigned_name"] == "dev"
 
 
 async def test_broker_deregister_releases_subscriptions(broker):
-    r = await broker.register_agent("sub", ["code"])
+    r = await broker.register_agent("sub")
     await broker.subscribe_topic(r["agent_id"], "alerts")
     await broker.deregister_agent(r["agent_id"])
     subs = await broker._sub_store.list_by_agent(r["agent_id"])
@@ -109,8 +108,8 @@ async def test_broker_deregister_releases_subscriptions(broker):
 
 
 async def test_broker_deregister_releases_squad_membership(broker):
-    r1 = await broker.register_agent("leader", [])
-    r2 = await broker.register_agent("member", [])
+    r1 = await broker.register_agent("leader")
+    r2 = await broker.register_agent("member")
     squad = await broker.create_squad("team", r1["agent_id"])
     await broker.join_squad(squad["squad_id"], r2["agent_id"], "member", r1["agent_id"])
     await broker.deregister_agent(r2["agent_id"])
@@ -120,8 +119,8 @@ async def test_broker_deregister_releases_squad_membership(broker):
 
 
 async def test_broker_deregister_leader_dissolves_squad(broker):
-    r1 = await broker.register_agent("leader", [])
-    r2 = await broker.register_agent("member", [])
+    r1 = await broker.register_agent("leader")
+    r2 = await broker.register_agent("member")
     squad = await broker.create_squad("team", r1["agent_id"])
     await broker.join_squad(squad["squad_id"], r2["agent_id"], "member", r1["agent_id"])
 
@@ -137,7 +136,7 @@ async def test_broker_deregister_leader_dissolves_squad(broker):
 
 
 async def test_broker_deregister_clears_agent_refs(broker):
-    r = await broker.register_agent("test", [])
+    r = await broker.register_agent("test")
     await broker.deregister_agent(r["agent_id"])
     info = await broker.get_agent_info(r["agent_id"])
     assert info["squad_id"] is None
@@ -145,11 +144,11 @@ async def test_broker_deregister_clears_agent_refs(broker):
 
 
 async def test_broker_send_notifies_wait_event(broker):
-    r = await broker.register_agent("receiver", [])
+    r = await broker.register_agent("receiver")
     event = broker.register_wait(r["agent_id"])
     assert not event.is_set()
     # send_message triggers _notify_recipients which sets the event
-    r1 = await broker.register_agent("sender", [])
+    r1 = await broker.register_agent("sender")
     await broker.send_message(r1["agent_id"], r["agent_id"], "hello", "p2p")
     assert event.is_set()
     broker.unregister_wait(r["agent_id"])
@@ -157,7 +156,7 @@ async def test_broker_send_notifies_wait_event(broker):
 
 async def test_broker_register_wait_and_notify(broker):
     import anyio
-    r = await broker.register_agent("test", [])
+    r = await broker.register_agent("test")
     event = broker.register_wait(r["agent_id"])
     assert not event.is_set()
     assert r["agent_id"] in broker._wait_events
@@ -168,14 +167,14 @@ async def test_broker_register_wait_and_notify(broker):
 
 
 async def test_broker_register_duplicate_name_raises(broker):
-    r1 = await broker.register_agent("dev", ["code"])
+    r1 = await broker.register_agent("dev")
     with pytest.raises(ValueError, match="already registered"):
-        await broker.register_agent("dev", ["test"])
+        await broker.register_agent("dev")
 
 
 async def test_broker_register_duplicate_name_force(broker):
-    r1 = await broker.register_agent("dev", ["code"])
-    r2 = await broker.register_agent("dev", ["test"], force=True)
+    r1 = await broker.register_agent("dev")
+    r2 = await broker.register_agent("dev", force=True)
     assert r1["assigned_name"] == "dev"
     assert r2["assigned_name"] == "dev"
     assert r1["agent_id"] != r2["agent_id"]
@@ -183,24 +182,24 @@ async def test_broker_register_duplicate_name_force(broker):
 
 async def test_broker_message_wait_unblocks_on_send(broker):
     """message_wait should return immediately when message arrives."""
-    r = await broker.register_agent("receiver", [])
+    r = await broker.register_agent("receiver")
     event = broker.register_wait(r["agent_id"])
     assert not event.is_set()
-    r1 = await broker.register_agent("sender", [])
+    r1 = await broker.register_agent("sender")
     await broker.send_message(r1["agent_id"], r["agent_id"], "hello", "p2p")
     assert event.is_set()
     broker.unregister_wait(r["agent_id"])
 
 
 async def test_broker_register_with_session_name(broker):
-    result = await broker.register_agent("test", ["code"], session_name="sess_123")
+    result = await broker.register_agent("test", session_name="sess_123")
     assert result["agent_id"].startswith("agent_")
     info = await broker.get_agent_info(result["agent_id"])
     assert info["session_name"] == "sess_123"
 
 
 async def test_broker_deregister_soft_delete(broker):
-    r = await broker.register_agent("test", [])
+    r = await broker.register_agent("test")
     await broker.deregister_agent(r["agent_id"])
     info = await broker.get_agent_info(r["agent_id"])
     assert info is not None
@@ -208,7 +207,7 @@ async def test_broker_deregister_soft_delete(broker):
 
 
 async def test_broker_reconnect(broker):
-    r = await broker.register_agent("dev", ["code"], session_name="sess_old")
+    r = await broker.register_agent("dev", session_name="sess_old")
     agent_id = r["agent_id"]
     await broker.deregister_agent(agent_id)
     result = await broker.reconnect_agent("dev", session_name="sess_new")
@@ -230,7 +229,7 @@ async def test_broker_cleanup_removes_expired_agents(tmp_path):
     b = Broker(config)
     await b.start()
 
-    result = await b.register_agent("old-agent", ["code"])
+    result = await b.register_agent("old-agent")
     await b.deregister_agent(result["agent_id"])
 
     # Manually age the disconnected_at timestamp
@@ -256,7 +255,7 @@ async def test_broker_cleanup_preserves_recent(tmp_path):
     b = Broker(config)
     await b.start()
 
-    result = await b.register_agent("recent-agent", ["code"])
+    result = await b.register_agent("recent-agent")
     await b.deregister_agent(result["agent_id"])
 
     removed = await b._run_cleanup(ttl_days=7)
@@ -280,8 +279,8 @@ async def test_broker_start_resets_active_agents(tmp_path):
     # First broker session: register agents
     b1 = Broker(config)
     await b1.start()
-    r1 = await b1.register_agent("alice", ["code"], session_name="sess_1")
-    r2 = await b1.register_agent("bob", ["review"], session_name="sess_2")
+    r1 = await b1.register_agent("alice", session_name="sess_1")
+    r2 = await b1.register_agent("bob", session_name="sess_2")
     await b1.stop()
 
     # Second broker session (simulates restart): agents should be disconnected
@@ -303,7 +302,7 @@ async def test_broker_start_already_disconnected_unchanged(tmp_path):
 
     b1 = Broker(config)
     await b1.start()
-    r = await b1.register_agent("ghost", ["code"])
+    r = await b1.register_agent("ghost")
     await b1.deregister_agent(r["agent_id"])
     original_info = await b1.get_agent_info(r["agent_id"])
     await b1.stop()
@@ -324,7 +323,7 @@ async def test_broker_reconnect_after_restart(tmp_path):
     # First session: register and subscribe
     b1 = Broker(config)
     await b1.start()
-    r = await b1.register_agent("dev", ["code"], session_name="sess_old")
+    r = await b1.register_agent("dev", session_name="sess_old")
     await b1.subscribe_topic(r["agent_id"], "alerts")
     await b1.stop()
 
@@ -359,7 +358,7 @@ async def test_broker_start_idempotent(tmp_path):
 
     b1 = Broker(config)
     await b1.start()
-    r = await b1.register_agent("alice", ["code"])
+    r = await b1.register_agent("alice")
     await b1.stop()
 
     b2 = Broker(config)
@@ -380,7 +379,7 @@ async def test_broker_start_idempotent(tmp_path):
 
 
 async def test_broker_reconnect_with_credentials(broker):
-    r = await broker.register_agent("dev", ["code"], session_name="sess_old")
+    r = await broker.register_agent("dev", session_name="sess_old")
     agent_id = r["agent_id"]
     await broker.deregister_agent(agent_id)
     result = await broker.reconnect_agent(
@@ -393,7 +392,7 @@ async def test_broker_reconnect_with_credentials(broker):
 
 
 async def test_broker_reconnect_clears_wait_event_before_update(broker):
-    r = await broker.register_agent("dev", ["code"])
+    r = await broker.register_agent("dev")
     agent_id = r["agent_id"]
     event = broker.register_wait(agent_id)
     assert not event.is_set()
@@ -406,7 +405,7 @@ async def test_broker_reconnect_clears_wait_event_before_update(broker):
 
 
 async def test_broker_reconnect_wrong_credentials(broker):
-    r = await broker.register_agent("dev", ["code"])
+    r = await broker.register_agent("dev")
     await broker.deregister_agent(r["agent_id"])
     with pytest.raises(ValueError, match="not found"):
         await broker.reconnect_agent(
@@ -415,8 +414,8 @@ async def test_broker_reconnect_wrong_credentials(broker):
 
 
 async def test_broker_send_to_disconnected_agent_buffers(broker):
-    r1 = await broker.register_agent("sender", [])
-    r2 = await broker.register_agent("receiver", [])
+    r1 = await broker.register_agent("sender")
+    r2 = await broker.register_agent("receiver")
     await broker.deregister_agent(r2["agent_id"])
     result = await broker.send_message(
         r1["agent_id"], r2["agent_id"], "hello", "p2p"
@@ -426,70 +425,45 @@ async def test_broker_send_to_disconnected_agent_buffers(broker):
 
 
 async def test_register_returns_peers_with_self(broker):
-    r = await broker.register_agent("dev", ["code"])
+    r = await broker.register_agent("dev")
     assert "peers" in r
     peer_ids = [p["agent_id"] for p in r["peers"]]
     assert r["agent_id"] in peer_ids
 
 
 async def test_register_peers_excludes_disconnected(broker):
-    r1 = await broker.register_agent("alive", ["code"])
-    await broker.register_agent("ghost", [])
+    r1 = await broker.register_agent("alive")
+    await broker.register_agent("ghost")
     await broker.deregister_agent(r1["agent_id"])
-    r3 = await broker.register_agent("joiner", [])
+    r3 = await broker.register_agent("joiner")
     peer_names = [p["name"] for p in r3["peers"]]
     assert "ghost" in peer_names
     assert "alive" not in peer_names
 
 
 async def test_register_peers_field_shape(broker):
-    await broker.register_agent("dev", ["code"])
-    r2 = await broker.register_agent("joiner", [])
+    await broker.register_agent("dev")
+    r2 = await broker.register_agent("joiner")
     peer = r2["peers"][0]
-    assert set(peer.keys()) == {"agent_id", "name", "capabilities"}
-
-
-async def test_register_peers_capabilities_deserialized(broker):
-    await broker.register_agent("dev", ["code", "review"])
-    r2 = await broker.register_agent("joiner", [])
-    peer = [p for p in r2["peers"] if p["name"] == "dev"][0]
-    assert peer["capabilities"] == ["code", "review"]
-    assert isinstance(peer["capabilities"], list)
-
-
-async def test_register_peers_empty_capabilities(broker):
-    await broker.register_agent("empty", [])
-    r2 = await broker.register_agent("joiner", ["code"])
-    peer = [p for p in r2["peers"] if p["name"] == "empty"][0]
-    assert peer["capabilities"] == []
+    assert set(peer.keys()) == {"agent_id", "name"}
 
 
 async def test_register_first_agent_peers_length_one(broker):
-    r = await broker.register_agent("solo", ["code"])
+    r = await broker.register_agent("solo")
     assert len(r["peers"]) == 1
     assert r["peers"][0]["name"] == "solo"
 
 
 async def test_register_peers_ordered_by_created_at(broker):
-    await broker.register_agent("first", [])
-    await broker.register_agent("second", [])
-    r3 = await broker.register_agent("third", [])
+    await broker.register_agent("first")
+    await broker.register_agent("second")
+    r3 = await broker.register_agent("third")
     names = [p["name"] for p in r3["peers"]]
     assert names == ["first", "second", "third"]
 
 
-async def test_register_peers_raises_on_malformed_capabilities(broker):
-    await broker.register_agent("first", ["code"])
-    await broker._db.execute(
-        "UPDATE agents SET capabilities = ? WHERE name = ?",
-        ("not-valid-json", "first"),
-    )
-    with pytest.raises(json.JSONDecodeError):
-        await broker.register_agent("second", [])
-
-
 async def test_reconnect_returns_peers_with_self(broker):
-    r = await broker.register_agent("dev", ["code"])
+    r = await broker.register_agent("dev")
     agent_id = r["agent_id"]
     await broker.deregister_agent(agent_id)
     result = await broker.reconnect_agent("dev", agent_id=agent_id)
@@ -499,8 +473,8 @@ async def test_reconnect_returns_peers_with_self(broker):
 
 
 async def test_reconnect_preserves_buffered_count_and_peers(broker):
-    r1 = await broker.register_agent("sender", [])
-    r2 = await broker.register_agent("receiver", [])
+    r1 = await broker.register_agent("sender")
+    r2 = await broker.register_agent("receiver")
     await broker.deregister_agent(r2["agent_id"])
     await broker.send_message(r1["agent_id"], r2["agent_id"], "hello", "p2p")
     result = await broker.reconnect_agent("receiver", agent_id=r2["agent_id"])

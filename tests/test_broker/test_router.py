@@ -41,8 +41,8 @@ async def sub_store(db):
 
 
 async def test_p2p_send_and_poll(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="receiver")
     result = await router.send_message(
         sender_id=sender, recipient=receiver,
         payload='{"text": "hello"}', msg_type=MessageType.P2P
@@ -55,8 +55,8 @@ async def test_p2p_send_and_poll(router, agent_store):
 
 
 async def test_p2p_send_by_name(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="bob", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="bob")
     result = await router.send_message(
         sender_id=sender, recipient="bob",
         payload='{}', msg_type=MessageType.P2P
@@ -65,8 +65,8 @@ async def test_p2p_send_by_name(router, agent_store):
 
 
 async def test_rpc_request_and_response(router, agent_store):
-    sender = await agent_store.create(name="caller", capabilities=[])
-    receiver = await agent_store.create(name="worker", capabilities=[])
+    sender = await agent_store.create(name="caller")
+    receiver = await agent_store.create(name="worker")
     req = await router.send_message(
         sender_id=sender, recipient=receiver,
         payload='{"task": "build"}', msg_type=MessageType.RPC_REQUEST
@@ -83,9 +83,9 @@ async def test_rpc_request_and_response(router, agent_store):
 
 
 async def test_pubsub_broadcast(router, agent_store, sub_store):
-    sender = await agent_store.create(name="publisher", capabilities=[])
-    sub1 = await agent_store.create(name="sub1", capabilities=[])
-    sub2 = await agent_store.create(name="sub2", capabilities=[])
+    sender = await agent_store.create(name="publisher")
+    sub1 = await agent_store.create(name="sub1")
+    sub2 = await agent_store.create(name="sub2")
     await sub_store.create(agent_id=sub1, topic="alerts")
     await sub_store.create(agent_id=sub2, topic="alerts")
 
@@ -102,9 +102,9 @@ async def test_pubsub_broadcast(router, agent_store, sub_store):
 
 
 async def test_pubsub_squad_scoped(router, agent_store, sub_store, squad_store):
-    sender = await agent_store.create(name="publisher", capabilities=[])
-    sub1 = await agent_store.create(name="sub1", capabilities=[])
-    sub2 = await agent_store.create(name="sub2", capabilities=[])
+    sender = await agent_store.create(name="publisher")
+    sub1 = await agent_store.create(name="sub1")
+    sub2 = await agent_store.create(name="sub2")
     squad_id = await squad_store.create(name="test-squad")
     # sub1 subscribes within squad, sub2 subscribes globally
     await sub_store.create(agent_id=sub1, topic="deploy", squad_id=squad_id)
@@ -119,8 +119,8 @@ async def test_pubsub_squad_scoped(router, agent_store, sub_store, squad_store):
 
 
 async def test_poll_auto_acknowledges_direct_message(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="receiver")
     result = await router.send_message(
         sender_id=sender, recipient=receiver,
         payload='{}', msg_type=MessageType.P2P
@@ -135,8 +135,8 @@ async def test_poll_auto_acknowledges_direct_message(router, agent_store):
 
 
 async def test_send_to_disconnected_agent_buffers(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="receiver")
     from agentwisper.common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
     result = await router.send_message(
@@ -152,8 +152,8 @@ async def test_send_to_disconnected_agent_buffers(router, agent_store):
 
 
 async def test_send_to_disconnected_by_name_buffers(router, agent_store):
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="alice", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="alice")
     from agentwisper.common.types import AgentStatus
     await agent_store.update_status(receiver, AgentStatus.DISCONNECTED)
     result = await router.send_message(
@@ -165,8 +165,8 @@ async def test_send_to_disconnected_by_name_buffers(router, agent_store):
 
 
 async def test_rpc_to_disconnected_agent_buffers(router, agent_store):
-    caller = await agent_store.create(name="caller", capabilities=[])
-    worker = await agent_store.create(name="worker", capabilities=[])
+    caller = await agent_store.create(name="caller")
+    worker = await agent_store.create(name="worker")
     from agentwisper.common.types import AgentStatus
     await agent_store.update_status(worker, AgentStatus.DISCONNECTED)
     result = await router.send_message(
@@ -178,8 +178,8 @@ async def test_rpc_to_disconnected_agent_buffers(router, agent_store):
 
 
 async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
-    sender = await agent_store.create(name="publisher", capabilities=[])
-    subscriber = await agent_store.create(name="sub", capabilities=[])
+    sender = await agent_store.create(name="publisher")
+    subscriber = await agent_store.create(name="sub")
     await sub_store.create(agent_id=subscriber, topic="events")
     await router.broadcast_message(sender_id=sender, topic="events", payload='{}')
 
@@ -195,9 +195,9 @@ async def test_poll_auto_acknowledges_delivery(router, agent_store, sub_store):
 
 async def test_pubsub_broadcast_skips_disconnected_subscriber(router, agent_store, sub_store):
     from agentwisper.common.types import AgentStatus
-    sender = await agent_store.create(name="publisher", capabilities=[])
-    sub1 = await agent_store.create(name="sub1", capabilities=[])
-    sub2 = await agent_store.create(name="sub2", capabilities=[])
+    sender = await agent_store.create(name="publisher")
+    sub1 = await agent_store.create(name="sub1")
+    sub2 = await agent_store.create(name="sub2")
     await sub_store.create(agent_id=sub1, topic="alerts")
     await sub_store.create(agent_id=sub2, topic="alerts")
     await agent_store.update_status(sub2, AgentStatus.DISCONNECTED)
@@ -212,8 +212,8 @@ async def test_pubsub_broadcast_skips_disconnected_subscriber(router, agent_stor
 
 async def test_poll_all_mode_includes_delivered(router, agent_store):
     """unread_only=False returns delivered messages as well as pending ones."""
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="receiver")
     await router.send_message(sender_id=sender, recipient=receiver,
                               payload="hello", msg_type=MessageType.P2P)
     # Default poll consumes (marks delivered) the message
@@ -227,8 +227,8 @@ async def test_poll_all_mode_includes_delivered(router, agent_store):
 
 async def test_poll_all_mode_does_not_consume_pending(router, agent_store):
     """unread_only=False is a pure query: pending messages stay pending."""
-    sender = await agent_store.create(name="sender", capabilities=[])
-    receiver = await agent_store.create(name="receiver", capabilities=[])
+    sender = await agent_store.create(name="sender")
+    receiver = await agent_store.create(name="receiver")
     await router.send_message(sender_id=sender, recipient=receiver,
                               payload="keep-me", msg_type=MessageType.P2P)
     assert len(await router.poll_messages(receiver, unread_only=False)) == 1

@@ -31,7 +31,6 @@ class AgentStore:
     async def create(
         self,
         name: str,
-        capabilities: list[str],
         metadata: dict[str, Any] | None = None,
         session_name: str | None = None,
     ) -> str:
@@ -39,13 +38,12 @@ class AgentStore:
         agent_id = _generate_agent_id()
         now = _now_iso()
         await self._db.execute(
-            "INSERT INTO agents (agent_id, name, status, capabilities, created_at, last_seen, session_name, metadata) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agents (agent_id, name, status, created_at, last_seen, session_name, metadata) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 agent_id,
                 name,
                 AgentStatus.ACTIVE,
-                json.dumps(capabilities),
                 now,
                 now,
                 session_name,

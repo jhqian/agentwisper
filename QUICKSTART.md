@@ -48,13 +48,13 @@ uv run agentwisper-broker start --port 8000
 Now in Claude Code, type:
 
 ```
-> Register me as an agent named "backend-dev" with code-review capability
+> Register me as an agent named "backend-dev"
 ```
 
-Claude Code calls `agent_register(name="backend-dev", capabilities=["code-review"])` and returns:
+Claude Code calls `agent_register(name="backend-dev")` and returns:
 
 ```json
-{"agent_id": "agent_d440f761321d4ed0a332", "assigned_name": "backend-dev", "status": "active", "peers": [{"agent_id": "agent_d440f761321d4ed0a332", "name": "backend-dev", "capabilities": ["code-review"]}]}
+{"agent_id": "agent_d440f761321d4ed0a332", "assigned_name": "backend-dev", "status": "active", "peers": [{"agent_id": "agent_d440f761321d4ed0a332", "name": "backend-dev"}]}
 ```
 
 Available slash commands (provided by the plugin):
@@ -105,8 +105,7 @@ async with streamablehttp_client("http://localhost:8000/mcp") as (read, write, _
     async with ClientSession(read, write) as session:
         await session.initialize()
         result = await session.call_tool("agent_register", {
-            "name": "my-agent",
-            "capabilities": ["code"]
+            "name": "my-agent"
         })
         print(result.content[0].text)
 ```
@@ -153,9 +152,9 @@ codex mcp add agentwisper-broker --transport streamable_http --url "http://local
 **3. Register agents** from each client:
 
 ```
-# Client A: Register me as "agent_a" with code-review capability
-# Client B: Register me as "agent_b" with testing capability
-# Client C: Register me as "agent_c" with docs capability
+# Client A: Register me as "agent_a"
+# Client B: Register me as "agent_b"
+# Client C: Register me as "agent_c"
 ```
 
 ## Hands-On Demo

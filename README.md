@@ -107,7 +107,7 @@ codex mcp add agentwisper-broker --transport streamable_http --url "http://local
 
 | Tool | Description |
 |------|-------------|
-| `agent_register` | Register a new agent with name and capabilities |
+| `agent_register` | Register a new agent with a name |
 | `agent_deregister` | Remove an agent and clean up its subscriptions |
 | `agent_reconnect` | Reconnect a disconnected agent; restores identity, memberships, and buffered messages |
 | `agent_list` | List all registered agents |

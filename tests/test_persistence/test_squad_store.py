@@ -43,8 +43,8 @@ async def test_dissolve(store):
 
 async def test_add_and_get_members(store, agent_store):
     squad_id = await store.create(name="team")
-    a1 = await agent_store.create(name="agent1", capabilities=[])
-    a2 = await agent_store.create(name="agent2", capabilities=[])
+    a1 = await agent_store.create(name="agent1")
+    a2 = await agent_store.create(name="agent2")
     await store.add_member(squad_id, a1, SquadRole.LEADER)
     await store.add_member(squad_id, a2, SquadRole.MEMBER)
     members = await store.get_members(squad_id)
@@ -53,7 +53,7 @@ async def test_add_and_get_members(store, agent_store):
 
 async def test_remove_member(store, agent_store):
     squad_id = await store.create(name="team")
-    a1 = await agent_store.create(name="agent1", capabilities=[])
+    a1 = await agent_store.create(name="agent1")
     await store.add_member(squad_id, a1, SquadRole.MEMBER)
     await store.remove_member(squad_id, a1)
     members = await store.get_members(squad_id)
@@ -62,7 +62,7 @@ async def test_remove_member(store, agent_store):
 
 async def test_get_member_role(store, agent_store):
     squad_id = await store.create(name="team")
-    a1 = await agent_store.create(name="agent1", capabilities=[])
+    a1 = await agent_store.create(name="agent1")
     await store.add_member(squad_id, a1, SquadRole.LEADER)
     role = await store.get_member_role(squad_id, a1)
     assert role == "leader"
@@ -70,7 +70,7 @@ async def test_get_member_role(store, agent_store):
 
 async def test_set_member_role(store, agent_store):
     squad_id = await store.create(name="team")
-    a1 = await agent_store.create(name="agent1", capabilities=[])
+    a1 = await agent_store.create(name="agent1")
     await store.add_member(squad_id, a1, SquadRole.MEMBER)
     await store.set_member_role(squad_id, a1, SquadRole.LEADER)
     role = await store.get_member_role(squad_id, a1)
